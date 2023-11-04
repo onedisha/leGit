@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "diff": "^5.1.0",
     "hash-files": "^1.1.1",
     "object-hash": "^3.0.0"
   }

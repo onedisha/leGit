@@ -1,1 +1,15 @@
-I am a test file here to test your hash functio
+I am a test file here to test your hash function
+this is a est bro
+
+hehe this is not  code file, le me copy one
++var onp  = require('../onp.js')
+var diff = new onp.Diff("abc", "abd");
+diff.compose();
+
+var correct_lcs = "ab";
+
+var correct_ses = [
+    { elem : 'a', t : 0 },
+    { elem : 'b', t : 0 },
+    { elem : 'c', t : -1 },
+];
