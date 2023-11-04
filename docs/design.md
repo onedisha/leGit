@@ -18,27 +18,30 @@ basic .git structure
 
 ## list of commands to implement
 ```
-git init
-git log
-git add
-git status
-git commit
-git checkout
-git merge
-git reset
+ - [x] git init
+ - [x] git add
+ - [ ] git commit
+ - [ ] git status
+ - [ ] git log
+ - [ ] git checkout
+ - [ ] git merge
+ - [ ] git reset
 ```
 
 ## git init (filename option)
 this command should create the bare basic files required for git to work,
+folders
 - .git
 - .git/refs
 - .git/refs/heads
-- .git/HEAD
 - .git/objects
+files
+- .git/HEAD
+- .git/index
 
 and insert ref: refs/heads/main inside .git/HEAD
 
-## git add (., -A, ,filenames)
+## git add (-A, ,filenames)
 this command should convert all the files listed to blobs and add them to .git/objects and store their information temporarily in 
 '.git/index'
 
@@ -58,7 +61,8 @@ this command pretty prints the files that are tracked by git, and mention which 
 this command is three steps
 
 1. with the list of the current files in index, form a tree object, create all intemediate trees necessary.
-    - remember the tree should include all the files that are in the previous commit as well. if there is no previous commit, technicallly this is taken care of because of how hashing works, but do note this when working on the code
+    - remember the tree should include all the files that are in the previous commit as well.
+     <!-- if there is no previous commit, technicallly this is taken care of because of how hashing works, but do note this when working on the code -->
 2. create a commit object with the root of tree, commiter name, email, commit message, commit description and add it to .git/objects
 3. add the commit if to the refs/heads/branch that the HEAD is currently pointing to.
 
