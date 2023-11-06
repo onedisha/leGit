@@ -20,10 +20,10 @@ basic .git structure
 ```
  - [x] git init
  - [x] git add
- - [ ] git commit
- - [ ] git status
- - [ ] git log
+ - [x] git commit
+ - [x] git log
  - [ ] git checkout
+ - [ ] git status
  - [ ] git merge
  - [ ] git reset
 ```
