@@ -2,6 +2,7 @@
 const fs = require('fs');
 const objectHash = require('object-hash');
 const zlib = require('node:zlib');
+const path = require('path');
 
 //globals
 const workingDir = './../playground/';
@@ -13,12 +14,12 @@ const baseFiles = [
     '.legit/HEAD',
     '.legit/index'
 ];
-const baseRef = 'ref: refs/head/main';
+const baseRef = 'ref: refs/heads/main';
 const INDEX = '.legit/index';
 const objectDir = '.legit/objects/';
 const username = 'lemon';
 const email = 'lemon@hoggy.com';
-const commitMessage = 'commit 2';
+let commitMessage = 'commit 2';
 const yellowColor = "\x1b[33m";
 const resetColor = "\x1b[0m";
 
@@ -38,6 +39,19 @@ function createEmptyFile(path){
     catch(err){
         console.log(err);
     }
+}
+
+function deleteFile(path){
+    fs.rmSync(workingDir+path,{
+        force:true
+    })
+}
+
+function deleteFolder(path){
+    fs.rmSync(workingDir+path,{
+        force:true,
+        recursive:true
+    })
 }
 
 function createFolder(path){
@@ -82,11 +96,16 @@ function hash(data,algorithm='sha1'){
 }
 
 function compress(data){
-    return zlib.deflateSync(data);
+    return data;
+    // return zlib.deflateSync(data);
 }
 
 function decompress(data){
-    return zlib.inflateSync(data);
+    return data;
+    // console.log(data);
+    // let ret = zlib.inflateSync(data);
+    // console.log(ret);
+    // return ret;
 }
 
 function makeTree(paths,map,cur=''){
@@ -189,30 +208,93 @@ function getObjectFromHash(objectHash){
     return readFile(filePath);
 }
 
-function updateTrees(currTreeHash, newTreeHash, currDir=""){
-    let currTree = {};
-    let newTree = {};
-    getObjectFromHash(currTreeHash).split('\n').filter(e=>e).forEach(line=>{
+function updateTrees(currTreeHash, nextTreeHash, currDir=""){
+    let currTree = [];
+    let nextTree = [];
+    if(currTreeHash!=""){
+        getObjectFromHash(currTreeHash).split('\n').filter(e=>e).forEach(line=>{
+            let [type,hash,name] = line.split(" ");
+            currTree.push({
+                type,
+                name,
+                hash
+            })
+        });
+    }
+    getObjectFromHash(nextTreeHash).split('\n').filter(e=>e).forEach(line=>{
         let [type,hash,name] = line.split(" ");
-        currTree[hash] = {
+        nextTree.push({
             type,
-            name
-        }
+            name,
+            hash
+        });
     });
-    getObjectFromHash(newTreeHash).split('\n').filter(e=>e).forEach(line=>{
-        let [type,hash,name] = line.split(" ");
-        newTree[hash] = {
-            type,
-            name
+    console.log(currTree, nextTree);
+    let getPath = (nodename) =>{
+        let str = currDir +'/'+nodename;
+        return str.slice(1);
+    }
+    // if blob
+    // if name in new and name not in old -> create file and fill file with contents(via hash)
+    // if name in old and not in new -> delete file
+    // if name in both && hash is not same -> update contents with hash found in new
+    let oldblobs = currTree.filter(node=>node.type=="blob");
+    let newblobs = nextTree.filter(node=>node.type=="blob");
+    for(let newblob of newblobs){
+        if(oldblobs.filter(obj => {
+            return obj.name == newblob.name;
+        }).length === 0){
+            createEmptyFile(getPath(newblob.name));
+            writeToFile(getPath(newblob.name), decompress(getObjectFromHash(newblob.hash)));
         }
-    });
-    console.log(currTree, newTree);
+        else if(oldblobs.filter(obj => {
+            return obj.name == newblob.name && obj.hash !== newblob.hash;
+        }).length > 0){
+            writeToFile(getPath(newblob.name), decompress(getObjectFromHash(newblob.hash)));
+        }
+    }
 
-    // if a name exists in new and not in old, create that file and insert contents
-    // same as above for folder, and then rcursively call this for its children
-    // if file and the same name exists but hash is different, update the contents of the file else leave
-    // if folder of same name exists but hash diff, just call recursive for children else ignore
-    // if file in old but not in new, delete file.
+    for(let oldblob of oldblobs){
+        if(newblobs.filter(obj => {
+            return obj.name == oldblob.name;
+        }).length === 0){
+            deleteFile(getPath(oldblob.name));
+        }
+    }
+    
+    // if tree
+        // if name in new and name not in old -> create folder and call the updateTree recursively , currDir = currDir+name
+        // if name in old and not in new -> delete folder
+        // if name in both && hash is not same -> call the updateTree recursively , currDir = currDir+name
+    let oldtrees = currTree.filter(node=>node.type=="tree");
+    let newtrees = nextTree.filter(node=>node.type=="tree");
+    for(let newtree of newtrees){
+        if(oldtrees.filter(obj => {
+            return obj.name == newtree.name;
+        }).length === 0){
+            createFolder(getPath(newtree.name));
+            // recursively create contents of folder newtree.name
+            updateTrees("",newtree.hash,currDir+"/"+newtree.name);
+        }
+
+        else if(oldtrees.filter(obj => {
+            return obj.name == newtree.name && obj.hash !== newtree.hash;
+        }).length > 0){
+            let nextArg = oldtrees.filter(obj => {
+                return obj.name == newtree.name && obj.hash !== newtree.hash;
+            })[0].hash;
+            console.log(nextArg);
+            updateTrees(nextArg,newtree.hash,currDir+"/"+newtree.name);
+        }
+    }
+
+    for(let oldtree of oldtrees){
+        if(newtrees.filter(obj => {
+            return obj.name == oldtree.name
+        }).length === 0){
+            deleteFile(getPath(oldtree.name));
+        }
+    }
 }
 
 // legit init
@@ -324,7 +406,7 @@ const commit = () => {
     commitStr += `committer ${username} <${email}> ${time}\n`;;
     commitStr += `\n`;
     commitStr += `${commitMessage}\n`;
-    console.log(commitStr);
+    // console.log(commitStr);
     // add commit hash to whatever file HEAD is pointing to
     let hashCommit = hash(commitStr);
     let head = readFile('.legit/HEAD');
@@ -341,6 +423,7 @@ const commit = () => {
     createFolder(`${objectDir}${hashCommit.slice(0,2)}`);
     createEmptyFile(filePath);
     writeToFile(filePath, commitStr);
+    return hashCommit;
 }
 
 const log = () => {
@@ -383,9 +466,66 @@ const checkoutCommit = (commitHash) => {
     // if there is a file in next not present in current, create it and then populate files accordingly
     // replace the content in files whose hash has changed
 }
-    
-// commit 2 c5efc7fbfa11b0d30e7d9ae796c6078a522d9fec
-// commit 1 5727f11fccd2b7d6c298f44c90ac83641722b131
 
-//log();
-checkoutCommit('5727f11fccd2b7d6c298f44c90ac83641722b131');
+function testing(){
+    // init
+    // if(pathExists('.legit')) return;
+    init();
+    // first commit will have
+    // /a
+    //     /b.js -> console.log("first commit");
+    //     /c.txt -> this is a text file of first commit
+    // /d
+    //     /e.py -> python for ML
+    // /f.md / -> first commit
+    createFolder('a');
+    createEmptyFile('a/b.js');
+    writeToFile('a/b.js','console.log("first commit");')
+    createEmptyFile('a/c.txt');
+    writeToFile('a/c.txt','this is a text file of first commit')
+    createFolder('d');
+    createEmptyFile('d/e.py');
+    writeToFile('d/e.py','python for ML');
+    createEmptyFile('f.md');
+    writeToFile('f.md',"first commit");
+    createFolder('newbi');
+    createEmptyFile('newbi/bi');
+    writeToFile('newbi/bi',"Hello this proves checkout works 100%");
+
+    addAll();
+    commitMessage = "fist commit";
+    let ret = commit();
+
+    // second commit will have 
+    // /a
+    //     /b.js -> console.log("second commit");
+    //     /p.kt -> "this is a new file for second commit"
+    // /d
+    //     /e.py -> python for ML
+    // /g.md / -> first commit
+    writeToFile('a/b.js','console.log("second commit");')
+    createEmptyFile('a/p.kt');
+    writeToFile('a/p.kt','"this is a new file for second commit"');
+    deleteFile('a/c.txt');
+    deleteFile('f.md');
+    createEmptyFile('g.md');
+    writeToFile('g.md',"first commit");
+    deleteFolder('newbi');
+    addAll()
+    commitMessage = "second commit bro";
+    commit()
+    // log
+    log()
+    // returns first commit for test purposes
+
+    return ret;
+}
+
+// 316b50f88eb1c58c436ba9290bb4dac1722b380a
+// 4f9d1c4c94a72881f28f03127c2edef752fabbcb
+
+deleteFolder("");
+let chCommit = testing();
+setTimeout(()=>{
+    checkoutCommit(chCommit);
+},5000);

@@ -22,7 +22,7 @@ basic .git structure
  - [x] git add
  - [x] git commit
  - [x] git log
- - [ ] git checkout
+ - [x] git checkout
  - [ ] git status
  - [ ] git merge
  - [ ] git reset
