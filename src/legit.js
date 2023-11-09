@@ -1,548 +1,503 @@
 // imports
-const fs = require('fs');
-const objectHash = require('object-hash');
-const zlib = require('node:zlib');
+const fs = require("fs");
+const objectHash = require("object-hash");
+const zlib = require("node:zlib");
 
 //globals
-const globals = require('./globals');
+const globals = require("./globals");
 
 // util functions
-function debug(...inp){
-    console.log(...inp);
+function debug(...inp) {
+  console.log(...inp);
 }
 
-function setWorkingDir(path){
-    globals.workingDir = path;
+function setRootDir(path) {
+  globals.rootDir = path;
 }
 
-function logMessage(msg){
-    console.log(msg);
+function logMessage(msg) {
+  console.log(msg);
 }
 
-function createEmptyFile(path){
-    try{
-        fs.closeSync(fs.openSync(globals.workingDir+path, 'w'));
+function createEmptyFile(path) {
+  try {
+    fs.closeSync(fs.openSync(globals.rootDir + path, "w"));
+  } catch (err) {
+    console.log(err);
+  }
+}
+
+function deleteFile(path) {
+  fs.rmSync(globals.rootDir + path, {
+    force: true,
+  });
+}
+
+function deleteDir(path) {
+  fs.rmSync(globals.rootDir + path, {
+    force: true,
+    recursive: true,
+  });
+}
+
+function createDir(path) {
+  fs.mkdirSync(globals.rootDir + path, {
+    recursive: true,
+  });
+}
+
+function listPathsInDir(path) {
+  return fs
+    .readdirSync(globals.rootDir + path, { recursive: true })
+    .map((file) => file.replace(/\\/g, "/"))
+    .filter((e) => e);
+}
+
+function writeToFile(path, data, encoding = "utf-8") {
+  fs.writeFileSync(globals.rootDir + path, data, {
+    encoding: encoding,
+  });
+}
+
+function readFile(path, encoding = "utf-8") {
+  return fs.readFileSync(globals.rootDir + path, {
+    encoding: encoding,
+  });
+}
+
+function pathExists(path) {
+  return fs.existsSync(globals.rootDir + path);
+}
+
+function isFile(path) {
+  return fs.statSync(globals.rootDir + path).isFile();
+}
+
+function isDir(path) {
+  try {
+    return fs.statSync(globals.rootDir + path).isDirectory();
+  } catch (err) {
+    return false;
+  }
+}
+
+function hash(data, algorithm = "sha1") {
+  return objectHash(data, {
+    algorithm: algorithm,
+  });
+}
+
+function compress(data) {
+  return data;
+  // return zlib.deflateSync(data).toString('base64');
+}
+
+function decompress(data) {
+  // let ret = zlib.inflateSync(data).toString('utf8');
+  // return ret;
+  return data;
+}
+
+function indexToTree(paths, map, cur = "") {
+  let splits = paths
+    .map((path) => path.split("/"))
+    .filter((path) => path.length != 0);
+  let root = {};
+
+  for (let [parent, ...rest] of splits) {
+    if (!Object.keys(root).includes(parent)) root[parent] = [];
+    if (rest.length != 0) root[parent].push(rest.join("/"));
+  }
+
+  for (let key in root) {
+    if (isDir(cur + "/" + key)) {
+      root[key] = {
+        type: "tree",
+        name: key,
+        children: indexToTree(root[key], map, cur + "/" + key),
+      };
+    } else {
+      root[key] = {
+        hash: map[`${cur}/${key}`.slice(1)],
+        name: key,
+        type: "blob",
+      };
     }
-    catch(err){
-        console.log(err);
-    }
+  }
+  return root;
 }
 
-function deleteFile(path,){
-    fs.rmSync(globals.workingDir+path,{
-        force:true
-    })
+function addTreeToObjects(tree) {
+  let children = Object.keys(tree.children);
+  let treeStr = "";
+
+  for (let child of children) {
+    let currNode = tree.children[child];
+
+    // this generates the hash for the tree node to use next
+    if (currNode.type !== "blob") addTreeToObjects(currNode);
+
+    treeStr += `${currNode.type} ${currNode.hash} ${currNode.name}\n`;
+  }
+
+  createObjectFromFileContent(treeStr);
+
+  tree.hash = hash(treeStr);
 }
 
-function deleteFolder(path){
-    fs.rmSync(globals.workingDir+path,{
-        force:true,
-        recursive:true
-    })
-}
-
-function createFolder(path){
-    fs.mkdirSync(globals.workingDir+path,{
-        recursive:true
-    });
-}
-
-function listDir(path){
-    return fs.readdirSync(globals.workingDir+path,{recursive:true}).map(file=>file.replace(/\\/g,'/')).filter(e=>e);
-}
-
-function writeToFile(path,data,encoding='utf-8'){
-    fs.writeFileSync(globals.workingDir+path,data,{
-        encoding:encoding,
-    });
-}
-
-function readFile(path,encoding='utf-8'){
-    return fs.readFileSync(globals.workingDir+path,{
-        encoding:encoding
-    })
-}
-
-function pathExists(path){
-    return fs.existsSync(globals.workingDir+path);
-}
-
-function isFile(path){
-    return fs.statSync(globals.workingDir+path).isFile();
-}
-
-function isDirectory(path){
-    try {
-        return fs.statSync(globals.workingDir+path).isDirectory();
-    }
-    catch(err){
-        return false;
-    }
-}
-
-function hash(data,algorithm='sha1'){
-    return objectHash(data,{
-        algorithm:algorithm
-    });
-}
-
-function compress(data){
-    return data;
-    // return zlib.deflateSync(data).toString('base64');
-}
-
-function decompress(data){
-    // let ret = zlib.inflateSync(data).toString('utf8');
-    // return ret;
-    return data;
-}
-
-function makeTree(paths,map,cur=''){
-    let splits = paths.map(path=>path.split('/')).filter(path=>path.length!=0);
-    let root = {};
-    for(let [first,...rest] of splits){ 
-        if(!Object.keys(root).includes(first)) root[first] = [];
-        if(rest.length!=0) root[first].push(rest.join("/"));
-    }
-    for(let key in root){
-        if(isDirectory(cur+"/"+key) && root[key].length!=0){
-            root[key] = {
-                type:'tree',
-                name:key,
-                children: makeTree(root[key],map,cur+"/"+key)
-            }
-        }
-        else {
-            root[key] = {
-                hash: map[`${cur}/${key}`.slice(1)],
-                name: key,
-                type: 'blob'
-            }
-        }
-    }
-    return root;
-}
-
-function addTreeToObjects(tree){
-    let children = Object.keys(tree.children); 
-    let treeStr = '';
-    // for each child of the current tree node called tree
-    // add child's `${type} ${hash} ${name}\n` to tree str
-    // if child doesnt have hash, it must be a tree node and you can call this function recursively on it
-    for(let child of children){
-        let currNode = tree.children[child];
-        if(currNode.type !== 'blob')  addTreeToObjects(currNode);
-        treeStr += `${currNode.type} ${currNode.hash} ${currNode.name}\n`;
-    }
-    // after the for loop, take the final tree str as content and find its hash
-    let hashTree = hash(treeStr);
-    // this is the hash of tree object, now, we need to make an actual tree objects at .legit/objects/
-    let filePath = `${globals.objectDir}${hashTree.slice(0,2)}/${hashTree.slice(2)}`;
-    // use this hash a the location, and tree str as the content to create the file.
-    createFolder(`${globals.objectDir}${hashTree.slice(0,2)}`);
-    createEmptyFile(filePath);
-    writeToFile(filePath, treeStr);
-    // return the hash for the caller of the function to use
-    tree.hash = hashTree;
-}   
-
-function getLastCommit(){
-    let head = readFile('.legit/HEAD');
-    let branch = '';
-    if(head.split(" ")[0]!='ref:') throw "cant commit in detached state";
-    branch = head.split(" ")[1];
-    branch = '.legit/'+branch;
-    if(!(pathExists(branch) && isFile(branch))) return false;
-    let commit = readFile(branch).split('\n')[0];
-    if(commit.length==0) return false;
-    return commit;
+function getLastCommit() {
+  let head = readFile(".legit/HEAD");
+  let branch = "";
+  if (head.split(" ")[0] != "ref:") throw "cant commit in detached state";
+  branch = head.split(" ")[1];
+  branch = ".legit/" + branch;
+  if (!(pathExists(branch) && isFile(branch))) return false;
+  let commit = readFile(branch).split("\n")[0];
+  if (commit.length == 0) return false;
+  return commit;
 }
 
 function formatTimestamp(timestamp) {
-    const date = new Date(timestamp);
-  
-    const options = {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      timeZoneName: 'short',
-      timeZoneOffset: 'numeric',
-    };
-    const formattedDate = date.toLocaleString('en-US', options);
-    return formattedDate; 
-}
-  
-function logCommit(file, commitHash){
-    let author = file[1].split(" ")[1];
-    let timestamp = file[1].split(" ")[3];
-    let commitMsg = file[4];
-    if(file[1].split(" ")[0] != "author"){ //if parent exists
-        author = file[2].split(" ")[1];
-        timestamp = file[2].split(" ")[3];
-        commitMsg = file[5];
-    }
-    console.log(`${globals.yellowColor}commit ${commitHash}${globals.resetColor}`);
-    console.log("Author:", author);
-    console.log("Date:", formatTimestamp(parseInt(timestamp)));
-    console.log(`\n${commitMsg}\n`);
+  const date = new Date(timestamp);
+
+  const options = {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZoneName: "short",
+    timeZoneOffset: "numeric",
+  };
+  const formattedDate = date.toLocaleString("en-US", options);
+  return formattedDate;
 }
 
-function getObjectFromHash(objectHash){
-    let filePath = `${globals.objectDir}${objectHash.slice(0,2)}/${objectHash.slice(2)}`;
-    return readFile(filePath);
+function logCommit(file, commitHash) {
+  let author = file[1].split(" ")[1];
+  let timestamp = file[1].split(" ")[3];
+  let commitMsg = file[4];
+  if (file[1].split(" ")[0] != "author") {
+    //if parent exists
+    author = file[2].split(" ")[1];
+    timestamp = file[2].split(" ")[3];
+    commitMsg = file[5];
+  }
+  console.log(
+    `${globals.yellowColor}commit ${commitHash}${globals.resetColor}`
+  );
+  console.log("Author:", author);
+  console.log("Date:", formatTimestamp(parseInt(timestamp)));
+  console.log(`\n${commitMsg}\n`);
 }
 
-function updateTrees(currTreeHash, nextTreeHash, currDir=""){
-    let currTree = [];
-    let nextTree = [];
-    if(currTreeHash!=""){
-        getObjectFromHash(currTreeHash).split('\n').filter(e=>e).forEach(line=>{
-            let [type,hash,name] = line.split(" ");
-            currTree.push({
-                type,
-                name,
-                hash
-            })
+function getObjectFromHash(objectHash) {
+  let filePath = `${globals.objectDir}${objectHash.slice(
+    0,
+    2
+  )}/${objectHash.slice(2)}`;
+  return readFile(filePath);
+}
+
+function populateChildrenFromTree(treeHash){
+  let children = [];
+  getObjectFromHash(treeHash)
+      .split("\n")
+      .filter((e) => e)
+      .forEach((line) => {
+        let [type, hash, name] = line.split(" ");
+        children.push({
+          type,
+          name,
+          hash,
         });
-    }
-    getObjectFromHash(nextTreeHash).split('\n').filter(e=>e).forEach(line=>{
-        let [type,hash,name] = line.split(" ");
-        nextTree.push({
-            type,
-            name,
-            hash
-        });
-    });
-    console.log(currTree, nextTree);
-    let getPath = (nodename) =>{
-        let str = currDir +'/'+nodename;
-        return str.slice(1);
-    }
-    // if blob
-    // if name in new and name not in old -> create file and fill file with contents(via hash)
-    // if name in old and not in new -> delete file
-    // if name in both && hash is not same -> update contents with hash found in new
-    let oldblobs = currTree.filter(node=>node.type=="blob");
-    let newblobs = nextTree.filter(node=>node.type=="blob");
-    for(let newblob of newblobs){
-        if(oldblobs.filter(obj => {
-            return obj.name == newblob.name;
-        }).length === 0){
-            createEmptyFile(getPath(newblob.name));
-            writeToFile(getPath(newblob.name), decompress(getObjectFromHash(newblob.hash)));
-        }
-        else if(oldblobs.filter(obj => {
-            return obj.name == newblob.name && obj.hash !== newblob.hash;
-        }).length > 0){
-            writeToFile(getPath(newblob.name), decompress(getObjectFromHash(newblob.hash)));
-        }
-    }
-
-    for(let oldblob of oldblobs){
-        if(newblobs.filter(obj => {
-            return obj.name == oldblob.name;
-        }).length === 0){
-            deleteFile(getPath(oldblob.name));
-        }
-    }
-    
-    // if tree
-        // if name in new and name not in old -> create folder and call the updateTree recursively , currDir = currDir+name
-        // if name in old and not in new -> delete folder
-        // if name in both && hash is not same -> call the updateTree recursively , currDir = currDir+name
-    let oldtrees = currTree.filter(node=>node.type=="tree");
-    let newtrees = nextTree.filter(node=>node.type=="tree");
-    for(let newtree of newtrees){
-        if(oldtrees.filter(obj => {
-            return obj.name == newtree.name;
-        }).length === 0){
-            createFolder(getPath(newtree.name));
-            // recursively create contents of folder newtree.name
-            updateTrees("",newtree.hash,currDir+"/"+newtree.name);
-        }
-
-        else if(oldtrees.filter(obj => {
-            return obj.name == newtree.name && obj.hash !== newtree.hash;
-        }).length > 0){
-            let nextArg = oldtrees.filter(obj => {
-                return obj.name == newtree.name && obj.hash !== newtree.hash;
-            })[0].hash;
-            console.log(nextArg);
-            updateTrees(nextArg,newtree.hash,currDir+"/"+newtree.name);
-        }
-    }
-
-    for(let oldtree of oldtrees){
-        if(newtrees.filter(obj => {
-            return obj.name == oldtree.name
-        }).length === 0){
-            deleteFile(getPath(oldtree.name));
-        }
-    }
+      });
+  return children;
 }
 
-// legit init
-// creates the basic files and folders necessary to initialise a repository
+function updateFilesFromTrees(currTreeHash, nextTreeHash, currDir = "") {
+  let currTree = [];
+  let nextTree = [];
+  
+  if (currTreeHash != "") currTree = populateChildrenFromTree(currTreeHash);
+  nextTree = populateChildrenFromTree(nextTreeHash);
+
+  let getPath = (nodeName) => {
+    let str = currDir + "/" + nodeName;
+    return str.slice(1);
+  };
+  
+  // if blob
+  // if name in new and name not in old -> create file and fill file with contents(via hash)
+  // if name in old and not in new -> delete file
+  // if name in both && hash is not same -> update contents with hash found in new
+  let oldblobs = currTree.filter((node) => node.type == "blob");
+  let newblobs = nextTree.filter((node) => node.type == "blob");
+  for (let newblob of newblobs) {
+    if (
+      oldblobs.filter((obj) => {
+        return obj.name == newblob.name;
+      }).length === 0
+    ) {
+      createEmptyFile(getPath(newblob.name));
+      writeToFile(
+        getPath(newblob.name),
+        decompress(getObjectFromHash(newblob.hash))
+      );
+    } else if (
+      oldblobs.filter((obj) => {
+        return obj.name == newblob.name && obj.hash !== newblob.hash;
+      }).length > 0
+    ) {
+      writeToFile(
+        getPath(newblob.name),
+        decompress(getObjectFromHash(newblob.hash))
+      );
+    }
+  }
+
+  for (let oldblob of oldblobs) {
+    if (
+      newblobs.filter((obj) => {
+        return obj.name == oldblob.name;
+      }).length === 0
+    ) {
+      deleteFile(getPath(oldblob.name));
+    }
+  }
+
+  // if tree
+  // if name in new and name not in old -> create dir and call the updateTree recursively , currDir = currDir+name
+  // if name in old and not in new -> delete dir
+  // if name in both && hash is not same -> call the updateTree recursively , currDir = currDir+name
+  let oldtrees = currTree.filter((node) => node.type == "tree");
+  let newtrees = nextTree.filter((node) => node.type == "tree");
+  for (let newtree of newtrees) {
+    if (
+      oldtrees.filter((obj) => {
+        return obj.name == newtree.name;
+      }).length === 0
+    ) {
+      createDir(getPath(newtree.name));
+      // recursively create contents of dir newtree.name
+      updateFilesFromTrees("", newtree.hash, currDir + "/" + newtree.name);
+    } else if (
+      oldtrees.filter((obj) => {
+        return obj.name == newtree.name && obj.hash !== newtree.hash;
+      }).length > 0
+    ) {
+      let nextArg = oldtrees.filter((obj) => {
+        return obj.name == newtree.name && obj.hash !== newtree.hash;
+      })[0].hash;
+      console.log(nextArg);
+      updateFilesFromTrees(nextArg, newtree.hash, currDir + "/" + newtree.name);
+    }
+  }
+
+  for (let oldtree of oldtrees) {
+    if (
+      newtrees.filter((obj) => {
+        return obj.name == oldtree.name;
+      }).length === 0
+    ) {
+      deleteFile(getPath(oldtree.name));
+    }
+  }
+}
+
 const init = () => {
-    for(let dir of globals.baseDirs){ 
-        createFolder(dir);
-    }
-    for(let file of globals.baseFiles){
-        createEmptyFile(file);
-    }
-    writeToFile('.legit/HEAD', globals.baseRef);
-}
+  for (let dir of globals.baseDirs) {
+    createDir(dir);
+  }
+  for (let file of globals.baseFiles) {
+    createEmptyFile(file);
+  }
+  writeToFile(".legit/HEAD", globals.baseRef);
+};
 
 const isInit = () => {
-    for(let dir of globals.baseDirs){
-        if(!pathExists(dir)) {
-            logMessage(dir + " is missing");
-            return false;
-        }
+  for (let dir of globals.baseDirs) {
+    if (!pathExists(dir)) {
+      logMessage(dir + " is missing");
+      return false;
     }
+  }
 
-    for(let file of globals.baseFiles){
-        if(!pathExists(file)) {
-            logMessage(file + " is missing");
-            return false;
-        }
+  for (let file of globals.baseFiles) {
+    if (!pathExists(file)) {
+      logMessage(file + " is missing");
+      return false;
     }
-    return true;
+  }
+  return true;
+};
+
+function createObjectFromFileContent(fileContent) {
+  let fileHash = hash(fileContent);
+  createDir(globals.objectDir + fileHash.slice(0, 2));
+  let filePath = `${globals.objectDir}${fileHash.slice(0, 2)}/${fileHash.slice(
+    2
+  )}`;
+  createEmptyFile(filePath);
+  let compressedFile = compress(fileContent);
+  writeToFile(filePath, compressedFile);
 }
 
-//legit add
 const add = (files) => {
-    if(!isInit()) {
-        logMessage(".legit files missing")
-        return;
-    }
-    const HashToContentMap = {};
-    
-    for(let file of files){
-        // find hash of file content
-        let fileContent = readFile(file);
-        let fileHash = hash(fileContent);
-        // add it to hashtocontentmap
-        HashToContentMap[fileHash] = file;
+  if (!isInit()) {
+    logMessage(".legit files missing");
+    return;
+  }
 
-        // create file for it with the hash as the path
-        //create a folder inside .legit/objects
-        createFolder(globals.objectDir+fileHash.slice(0,2));
-        //create emptyfile if not exists
-        let filePath = `${globals.objectDir}${fileHash.slice(0,2)}/${fileHash.slice(2)}`;
-        if(!(pathExists(filePath) && isFile(filePath))) createEmptyFile(filePath);
-        // insert the data as a binary
-        let compressedFile = compress(fileContent);
-        writeToFile(filePath, compressedFile,'binary');
-    }
-    // format and put hashcontentmap inside .legit/index
-    let indexContent = '';
-    for(let hash in HashToContentMap){
-        indexContent += `${hash} ${HashToContentMap[hash]}\n`;
-    }
-    writeToFile(globals.INDEX, indexContent);
-}
+  let indexContent = "";
+
+  for (let file of files) {
+    let fileContent = readFile(file);
+    let fileHash = hash(fileContent);
+
+    indexContent += `${fileHash} ${file}\n`;
+
+    createObjectFromFileContent(fileContent);
+  }
+
+  writeToFile(globals.indexDir, indexContent);
+};
 
 const addAll = () => {
-    // get paths of all the files in diectory,
-    if(!isInit()) {
-        logMessage(".legit files missing");
-        return;
-    }
-    const paths = listDir("");
-    let files = paths.filter(file=>{
-        // check if is a file & it isn't in .legit folder
-        return isFile(file) && file.slice(0,7)!=".legit/";   
-    })
-    // debug(files);
-    add(files);
+  if (!isInit()) {
+    logMessage(".legit files missing");
+    return;
+  }
+
+  let files = listPathsInDir("").filter((file) => {
+    return isFile(file) && !isIgnoredFromAdd(file);
+  });
+
+  add(files);
+};
+
+function isIgnoredFromAdd(file) {
+  return file.slice(0, 7) == ".legit/";
 }
 
-//legit commit
-const commit = () => {
-    // make tree
-    let fileToHash = {};
-    let indexFiles = readFile(globals.INDEX)
-                        .split('\n')
-                        .filter(line=>line.length!=0)
-                        .map(line=>{
-                            let [hash,path] = line.split(" ");
-                            fileToHash[path] = hash;
-                            return path;
-                        })
-                        .sort();
-    let tree = makeTree(indexFiles,fileToHash);
-    let root = {
-        name:'root',
-        type:'tree',
-        children: tree
-    };
-    // add tree objects to 
-    addTreeToObjects(root);
-    // make commit obj
-    let commitStr = '';
-    let time = new Date();
-    time = time.getTime();
-    commitStr += `tree ${root.hash}\n`;
-    let parentCommit = getLastCommit();
-    if(parentCommit) commitStr += `parent ${parentCommit}\n`;
-    commitStr += `author ${globals.username} <${globals.email}> ${time}\n`;
-    commitStr += `committer ${globals.username} <${globals.email}> ${time}\n`;;
-    commitStr += `\n`;
-    commitStr += `${globals.commitMessage}\n`;
-    // console.log(commitStr);
-    // add commit hash to whatever file HEAD is pointing to
-    let hashCommit = hash(commitStr);
-    let head = readFile('.legit/HEAD');
-    let branch = '';
-    if(head.split(" ")[0]!='ref:')
-        throw "cant commit in detached state";
-    branch = head.split(" ")[1];
-    branch = '.legit/'+branch;
-    if(!(pathExists(branch) && isFile(branch))) createEmptyFile(branch);  
-    writeToFile(branch, hashCommit);
-    // add the commit obj to .legit/objects
-    let filePath = `${globals.objectDir}${hashCommit.slice(0,2)}/${hashCommit.slice(2)}`;
-    // use this hash a the location, and tree str as the content to create the file.
-    createFolder(`${globals.objectDir}${hashCommit.slice(0,2)}`);
-    createEmptyFile(filePath);
-    writeToFile(filePath, commitStr);
-    return hashCommit;
+function createTree() {
+  let fileToHash = {};
+  let indexFiles = readFile(globals.indexDir)
+    .split("\n")
+    .filter((line) => line.length != 0)
+    .map((line) => {
+      let [hash, path] = line.split(" ");
+      fileToHash[path] = hash;
+      return path;
+    })
+    .sort();
+
+  let tree = indexToTree(indexFiles, fileToHash);
+  let root = {
+    name: "root",
+    type: "tree",
+    children: tree,
+  };
+
+  addTreeToObjects(root);
+  return root;
 }
+
+function createCommitStr(treeHash){
+  let commitStr = "";
+  let time = new Date();
+  time = time.getTime();
+  commitStr += `tree ${treeHash}\n`;
+  let parentCommit = getLastCommit();
+  if (parentCommit) commitStr += `parent ${parentCommit}\n`;
+  commitStr += `author ${globals.username} <${globals.email}> ${time}\n`;
+  commitStr += `committer ${globals.username} <${globals.email}> ${time}\n`;
+  commitStr += `\n`;
+  commitStr += `${globals.commitMessage}\n`;
+  return commitStr;
+}
+
+function updateRefsWithCommit(commitStr){
+  let head = readFile(".legit/HEAD");
+  let branch = "";
+  if (head.split(" ")[0] != "ref:") throw "can't commit in detached state";
+  branch = head.split(" ")[1];
+  branch = ".legit/" + branch;
+  if (!(pathExists(branch) && isFile(branch))) createEmptyFile(branch);
+  writeToFile(branch, hash(commitStr));
+}
+
+const commit = () => {
+  let root = createTree();
+  let commitStr = createCommitStr(root.hash);
+  
+  createObjectFromFileContent(commitStr);
+  updateRefsWithCommit(commitStr);
+};
 
 const log = () => {
-    // get latest commit and console log its details
-    //details: commit hash, author, date, message
-    let lastCommit = getLastCommit();
-    if(!lastCommit){
-        console.log("You haven't committed anything");
-        return;
-    }
-    let filePath = `${globals.objectDir}${lastCommit.slice(0,2)}/${lastCommit.slice(2)}`;
-    let file = readFile(filePath).split('\n');
-    let parent = file[1].split(" ")[0];
-    // find parent if it has and do the same until the first commit
-    while(parent === "parent"){
-        logCommit(file,lastCommit);
-        lastCommit = file[1].split(" ")[1];
-        filePath = `${globals.objectDir}${lastCommit.slice(0,2)}/${lastCommit.slice(2)}`;
-        file = readFile(filePath).split('\n');
-        parent = file[1].split(" ")[0];
-    }
-    logCommit(file,lastCommit);
-}
+  let lastCommit = getLastCommit();
+  if (!lastCommit) {
+    console.log("You haven't committed anything");
+    return;
+  }
+  let file = getObjectFromHash(lastCommit).split('\n');
+  let parent = file[1].split(" ")[0];
 
-const checkoutCommit = (commitHash) => {
-    // change the .legit/head to given commitHash
-    // while testing
-    writeToFile('.legit/HEAD','ref: refs/heads/main');
-    //
-    let currCommit = getLastCommit();
-    writeToFile(".legit/HEAD", commitHash);
-    // get the current and next trees where next tree is the tree we are going to checkout
-    let filePath = `${globals.objectDir}${currCommit.slice(0,2)}/${currCommit.slice(2)}`;
-    let currTreeHash = readFile(filePath).split('\n')[0].split(" ")[1];
-    filePath = `${globals.objectDir}${commitHash.slice(0,2)}/${commitHash.slice(2)}`;
-    let nextTreeHash = readFile(filePath).split('\n')[0].split(" ")[1];
-    updateTrees(currTreeHash,nextTreeHash);
-    // if there is a file that is in current and not present in next, delete it, 
-    // while deleting if parent folder becomes empty, delete that also
-    // if there is a file in next not present in current, create it and then populate files accordingly
-    // replace the content in files whose hash has changed
-}
+  while (parent === "parent") {
+    logCommit(file, lastCommit);
+    lastCommit = file[1].split(" ")[1];
+    file = getObjectFromHash(lastCommit).split('\n');
+    parent = file[1].split(" ")[0];
+  }
+  logCommit(file, lastCommit);
+};
 
-function testing(){
-    // init
-    // if(pathExists('.legit')) return;
-    init();
-    // first commit will have
-    // /a
-    //     /b.js -> console.log("first commit");
-    //     /c.txt -> this is a text file of first commit
-    // /d
-    //     /e.py -> python for ML
-    // /f.md / -> first commit
-    createFolder('a');
-    createEmptyFile('a/b.js');
-    writeToFile('a/b.js','console.log("first commit");')
-    createEmptyFile('a/c.txt');
-    writeToFile('a/c.txt','this is a text file of first commit')
-    createFolder('d');
-    createEmptyFile('d/e.py');
-    writeToFile('d/e.py','python for ML');
-    createEmptyFile('f.md');
-    writeToFile('f.md',"first commit");
-    createFolder('newbi');
-    createEmptyFile('newbi/bi');
-    writeToFile('newbi/bi',"Hello this proves checkout works 100%");
-
-    addAll();
-    globals.commitMessage = "fist commit";
-    let ret = commit();
-
-    // second commit will have 
-    // /a
-    //     /b.js -> console.log("second commit");
-    //     /p.kt -> "this is a new file for second commit"
-    // /d
-    //     /e.py -> python for ML
-    // /g.md / -> first commit
-    writeToFile('a/b.js','console.log("second commit");')
-    createEmptyFile('a/p.kt');
-    writeToFile('a/p.kt','"this is a new file for second commit"');
-    deleteFile('a/c.txt');
-    deleteFile('f.md');
-    createEmptyFile('g.md');
-    writeToFile('g.md',"first commit");
-    deleteFolder('newbi');
-    addAll()
-    globals.commitMessage = "second commit bro";
-    commit()
-    // log
-    log()
-    // returns first commit for test purposes
-
-    return ret;
-}
+const checkoutCommit = (nextCommit) => {
+  let currCommit = getLastCommit();
+  writeToFile(".legit/HEAD", nextCommit);
+  
+  let currTreeHash = getObjectFromHash(currCommit).split('\n')[0].split(" ")[1];
+  let nextTreeHash = getObjectFromHash(nextCommit).split('\n')[0].split(" ")[1];
+  updateFilesFromTrees(currTreeHash, nextTreeHash);
+};
 
 module.exports = {
-    // utils
-    debug,
-    logMessage,
-    setWorkingDir,
-    createEmptyFile,
-    deleteFile,
-    deleteFolder,
-    createFolder,
-    writeToFile,
-    listDir,
-    readFile,
-    pathExists,
-    isFile,
-    isDirectory,
-    hash,
-    compress,
-    decompress,
-    // core exports
-    makeTree,
-    addTreeToObjects,
-    getLastCommit,
-    formatTimestamp,
-    logCommit,
-    getObjectFromHash,
-    updateTrees,
-    // core
-    init,
-    isInit,
-    add,
-    addAll,
-    commit,
-    log,
-    checkoutCommit,
-    //globals
-    globals
-}
+  // utils
+  debug,
+  logMessage,
+  setRootDir,
+  createEmptyFile,
+  deleteFile,
+  deleteDir,
+  createDir,
+  writeToFile,
+  listPathsInDir,
+  readFile,
+  pathExists,
+  isFile,
+  isDir,
+  hash,
+  compress,
+  decompress,
+  // core exports
+  indexToTree,
+  addTreeToObjects,
+  getLastCommit,
+  formatTimestamp,
+  logCommit,
+  getObjectFromHash,
+  updateFilesFromTrees,
+  // core
+  init,
+  isInit,
+  add,
+  addAll,
+  commit,
+  log,
+  checkoutCommit,
+  //globals
+  globals,
+};
