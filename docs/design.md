@@ -24,6 +24,7 @@ basic .git structure
  - [x] git log
  - [x] git checkout
  - [ ] git status
+ - [ ] git branch
  - [ ] git merge
  - [ ] git reset
 ```

@@ -4,14 +4,16 @@
   "description": "Implementing Git with Node.js",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
-  "author": "",
+  "author": "Lemon and hoggy",
   "license": "ISC",
   "dependencies": {
     "diff": "^5.1.0",
     "hash-files": "^1.1.1",
-    "nvm": "^0.0.4",
     "object-hash": "^3.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   }
 }
