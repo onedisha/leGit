@@ -11,12 +11,12 @@ function debug(...inp) {
   console.log(...inp);
 }
 
-function setRootDir(path) {
-  globals.rootDir = path;
-}
-
 function logMessage(msg) {
   console.log(msg);
+}
+
+function setRootDir(path) {
+  globals.rootDir = path;
 }
 
 function createEmptyFile(path) {
@@ -88,14 +88,12 @@ function hash(data, algorithm = "sha1") {
 }
 
 function compress(data) {
-  return data;
-  // return zlib.deflateSync(data).toString('base64');
+  return zlib.deflateSync(data);
 }
 
 function decompress(data) {
-  // let ret = zlib.inflateSync(data).toString('utf8');
-  // return ret;
-  return data;
+  let ret = zlib.inflateSync(data).toString();
+  return ret;
 }
 
 function indexToTree(paths, map, cur = "") {
@@ -148,7 +146,7 @@ function addTreeToObjects(tree) {
 function getLastCommit() {
   let head = readFile(".legit/HEAD");
   let branch = "";
-  if (head.split(" ")[0] != "ref:") throw "cant commit in detached state";
+  if (head.split(" ")[0] != "ref:") return head;
   branch = head.split(" ")[1];
   branch = ".legit/" + branch;
   if (!(pathExists(branch) && isFile(branch))) return false;
@@ -194,11 +192,8 @@ function logCommit(file, commitHash) {
 }
 
 function getObjectFromHash(objectHash) {
-  let filePath = `${globals.objectDir}${objectHash.slice(
-    0,
-    2
-  )}/${objectHash.slice(2)}`;
-  return readFile(filePath);
+  let filePath = `${globals.objectDir}${objectHash.slice(0,2)}/${objectHash.slice(2)}`;
+  return decompress(readFile(filePath,null));
 }
 
 function populateChildrenFromTree(treeHash){
@@ -244,7 +239,7 @@ function updateFilesFromTrees(currTreeHash, nextTreeHash, currDir = "") {
       createEmptyFile(getPath(newblob.name));
       writeToFile(
         getPath(newblob.name),
-        decompress(getObjectFromHash(newblob.hash))
+        getObjectFromHash(newblob.hash)
       );
     } else if (
       oldblobs.filter((obj) => {
@@ -253,7 +248,7 @@ function updateFilesFromTrees(currTreeHash, nextTreeHash, currDir = "") {
     ) {
       writeToFile(
         getPath(newblob.name),
-        decompress(getObjectFromHash(newblob.hash))
+        getObjectFromHash(newblob.hash)
       );
     }
   }
@@ -302,7 +297,7 @@ function updateFilesFromTrees(currTreeHash, nextTreeHash, currDir = "") {
         return obj.name == oldtree.name;
       }).length === 0
     ) {
-      deleteFile(getPath(oldtree.name));
+      deleteDir(getPath(oldtree.name));
     }
   }
 }
@@ -337,9 +332,7 @@ const isInit = () => {
 function createObjectFromFileContent(fileContent) {
   let fileHash = hash(fileContent);
   createDir(globals.objectDir + fileHash.slice(0, 2));
-  let filePath = `${globals.objectDir}${fileHash.slice(0, 2)}/${fileHash.slice(
-    2
-  )}`;
+  let filePath = `${globals.objectDir}${fileHash.slice(0, 2)}/${fileHash.slice(2)}`;
   createEmptyFile(filePath);
   let compressedFile = compress(fileContent);
   writeToFile(filePath, compressedFile);
@@ -464,6 +457,76 @@ const checkoutCommit = (nextCommit) => {
   updateFilesFromTrees(currTreeHash, nextTreeHash);
 };
 
+const createBranch = (branchName) => {
+  // create new dir/file in refs/heads/branchname
+  let dirs = branchName.split("/").slice(0, -1).join("/");
+  let branch = branchName.split("/").slice(-1)[0];
+  createDir(globals.headsDir+dirs);
+  createEmptyFile(globals.headsDir+branchName);
+ // copy the contents if the current branch, pointed to by HEAD into the new file
+  let lastCommit = getLastCommit();
+  writeToFile(globals.headsDir+branchName,lastCommit);
+}
+
+function getCurrentBranch(){
+  let head = readFile('.legit/HEAD').split("\n")[0].split(" ");
+  if(head.length == 1) return false;
+  let ref = head.slice(-1)[0];
+  return ref.split("/").slice(2).join("/");
+}
+
+const listBranches = () => {
+
+  let allPaths = listPathsInDir(globals.headsDir).filter(path=>{
+    return isFile(globals.headsDir+path);
+  }); 
+
+  let currentBranch = getCurrentBranch();
+  if(!currentBranch) {
+    console.log(`  ${globals.greenColor}(HEAD in detached state) at ${getLastCommit()}${globals.resetColor}`);
+  }
+  
+  for(path of allPaths){
+    if(currentBranch==path){
+      console.log(`* ${globals.greenColor}${path}${globals.resetColor}`)
+    }
+    else{
+      console.log(`  ${path}`);
+    }
+  }
+}
+
+function isValidBranch(branchName){
+  let branchFile = globals.headsDir+branchName;
+  if(!pathExists(branchFile)) return false;
+  let commitHash = readFile(branchFile).split("\n").filter(e=>e)[0];
+  let filePath = `${globals.objectDir}${commitHash.slice(0,2)}/${commitHash.slice(2)}`;
+  if(pathExists(filePath) && isFile(filePath)) return true;
+  return false;
+}
+
+function getCommitFromBranch(branchName){
+  let branchFile = globals.headsDir+branchName;
+  let commitHash = readFile(branchFile).split("\n").filter(e=>e)[0];
+  return commitHash;
+} 
+
+const checkoutBranch = (branchName) => {
+  let currCommit = getLastCommit();
+
+  if(!isValidBranch(branchName)) {
+    console.log("invalid branch name");
+    return;
+  }
+  let nextCommit = getCommitFromBranch(branchName);
+
+  writeToFile('.legit/HEAD', `ref: refs/heads/${branchName}`);
+
+  let currTreeHash = getObjectFromHash(currCommit).split('\n')[0].split(" ")[1];
+  let nextTreeHash = getObjectFromHash(nextCommit).split('\n')[0].split(" ")[1];
+  updateFilesFromTrees(currTreeHash, nextTreeHash);
+}
+
 module.exports = {
   // utils
   debug,
@@ -489,6 +552,7 @@ module.exports = {
   formatTimestamp,
   logCommit,
   getObjectFromHash,
+  createObjectFromFileContent,
   updateFilesFromTrees,
   // core
   init,
@@ -498,6 +562,11 @@ module.exports = {
   commit,
   log,
   checkoutCommit,
+  createBranch,
+  listBranches,
+  getCurrentBranch,
+  checkoutBranch,
+  getCommitFromBranch,
   //globals
   globals,
 };

@@ -23,6 +23,7 @@ let {
   formatTimestamp,
   logCommit,
   getObjectFromHash,
+  createObjectFromFileContent,
   updateFilesFromTrees,
   // core
   init,
@@ -32,6 +33,11 @@ let {
   commit,
   log,
   checkoutCommit,
+  createBranch,
+  listBranches,
+  getCurrentBranch,
+  checkoutBranch,
+  getCommitFromBranch,
   // globals
   globals,
 } = require("./legit.js");
@@ -41,6 +47,7 @@ setRootDir(process.cwd() + "/tests/playground/");
 deleteDir("");
 let logs = [];
 let clearLogs = () => (logs = []);
+let savedLog = console.log;
 console.log = (...msg) => {
   logs.push(msg);
 };
@@ -83,12 +90,14 @@ describe("utils", () => {
   });
 
   test("need to fix compress and decompress on refactoring", () => {
-    // TODO fix compress and decompress
+    createObjectFromFileContent("lemon and hoggy");
+    expect(getObjectFromHash(hash("lemon and hoggy"))).toBe("lemon and hoggy");
   });
 });
 
 describe("core functions", () => {
   test("init creates all files and dirs with content", () => {
+    deleteDir("");
     init();
     let paths = [...globals.baseDirs, ...globals.baseFiles];
     for (path of paths) {
@@ -189,7 +198,9 @@ describe("core functions", () => {
     globals.username = "lemon";
     globals.email = "lemon@hoggy.com";
     globals.commitMessage = "commit 1";
+    expect(getCurrentBranch()).toBe("main");
     commit();
+    expect(getCurrentBranch()).toBe("main");
     expect(getLastCommit()).toBe("b049e50aeb70329e33419c68ea3caa4d2c887701");
   });
 
@@ -268,10 +279,63 @@ describe("core functions", () => {
 
     expect(pathExists("a/p.kt")).toBe(false);
     expect(pathExists("g.md")).toBe(false);
-    deleteDir("");
+    // deleteDir("")
   });
+  
+  test('branch ',()=>{
+    checkoutCommit('20c0d16d7ce0aab898ec527afe4dde39836ddce0'); // commit 2
+    let branchName = 'lemon/hoggy';
+    createBranch(branchName);
+    expect(pathExists('.legit/refs/heads/'+branchName) && isFile('.legit/refs/heads/'+branchName)).toBe(true);
+    clearLogs();
+    listBranches();
+    let expectedLog = [
+        `  ${globals.greenColor}(HEAD in detached state) at 20c0d16d7ce0aab898ec527afe4dde39836ddce0${globals.resetColor}`,
+        "  main",
+        "  lemon/hoggy",
+      ]
+    expect(logs.flat()).toMatchObject(expectedLog);
+    checkoutCommit('b049e50aeb70329e33419c68ea3caa4d2c887701');
+    expect(pathExists("a/b.js")).toBe(true);
+    expect(readFile("a/b.js")).toBe('console.log("first commit");');
+    expect(pathExists("a/c.txt")).toBe(true);
+    expect(readFile("a/c.txt")).toBe("this is a text file of first commit");
+    expect(pathExists("f.md")).toBe(true);
+    expect(readFile("f.md")).toBe("first commit");
+    expect(pathExists("newbi/bi")).toBe(true);
+    expect(readFile("newbi/bi")).toBe("Hello this proves checkout works 100%");
+
+    expect(pathExists("a/p.kt")).toBe(false);
+    expect(pathExists("g.md")).toBe(false);
+
+  })
+  
+  test("checkout branch by name",()=>{
+    expect(getCurrentBranch()).toBe(false);
+    checkoutBranch('lemon/hoggy');
+    expect(readFile('.legit/HEAD')).toBe('ref: refs/heads/lemon/hoggy');
+    expect(getCommitFromBranch('lemon/hoggy')).toBe('20c0d16d7ce0aab898ec527afe4dde39836ddce0');
+    expect(pathExists("a/b.js")).toBe(true);
+    expect(pathExists("a/c.txt")).toBe(false);
+    expect(pathExists("f.md")).toBe(false);
+    expect(pathExists("newbi/bi")).toBe(false);
+
+    expect(pathExists("a/p.kt")).toBe(true);
+    expect(pathExists("g.md")).toBe(true);
+  })
+
+  test("haha",()=>{
+
+  })
+
+  deleteDir("");
 
   // test('edge cases for the above when empty strings are added in the end of a file')
   // test('when the order of files change in commit messages)
+
 });
-// TODO performance tests
+// TODO unit tests
+
+describe('unit tests',()=>{
+  
+})
