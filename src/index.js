@@ -1,5 +1,5 @@
 const { exec } = require('child_process');
-const child = exec(`node C:/Users/udithkumarv/projects/leGit/src/legit.js ${process.argv.slice(2).join(" ")}`);
+const child = exec(`node C:/Users/Yudeeeth/projects/leGit/src/legit.js ${process.argv.slice(2).join(" ")}`);
 child.stdout.on('data',(data)=>{
     process.stdout.write(data);
 })

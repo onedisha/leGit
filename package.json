@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "bin": "pkg src/legit.js -o legit"
+    "bin": "pkg src/index.js -o legit"
   },
   "author": "Lemon and hoggy",
   "license": "ISC",

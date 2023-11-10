@@ -4,26 +4,24 @@ const objectHash = require("object-hash");
 const zlib = require("node:zlib");
 
 // commandline parser
-// let commands = {
-//   'init': initCaller,
-//   'add': addCaller,
-//   'commit': commitCaller,
-//   'log': logCaller,
-//   'branch': branchCaller,
-//   'checkout': checkoutCaller
-// }
+let commands = {
+  'init': initCaller,
+  // 'add': addCaller,
+  // 'commit': commitCaller,
+  // 'log': logCaller,
+  // 'branch': branchCaller,
+  // 'checkout': checkoutCaller
+}
 
 commandlineParser();
 function commandlineParser(){
-  console.log(process.argv);
-  return;
   let args = process.argv.slice(2);
   if(!(args[0] in commands)) {
     console.log("invalid command, please try again");
     return;
   }
   if(args[0]!='init') setUpGlobals();
-  commands[args[0]](args.slice(1));
+  commands[args[0]](...args.slice(1));
 }
 
 //globals
@@ -562,7 +560,7 @@ function setUpGlobals(){
 function initCaller(...args){
   // legit init
   // setUpGlobals()
-
+  console.log(args);
 }
 
 module.exports = {
