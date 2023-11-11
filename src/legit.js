@@ -3,6 +3,27 @@ const fs = require("fs");
 const objectHash = require("object-hash");
 const zlib = require("node:zlib");
 
+// commandline parser
+let commands = {
+  'init': initCaller,
+  // 'add': addCaller,
+  // 'commit': commitCaller,
+  // 'log': logCaller,
+  // 'branch': branchCaller,
+  // 'checkout': checkoutCaller
+}
+
+commandlineParser();
+function commandlineParser(){
+  let args = process.argv.slice(2);
+  if(!(args[0] in commands)) {
+    console.log("invalid command, please try again");
+    return;
+  }
+  if(args[0]!='init') setUpGlobals();
+  commands[args[0]](...args.slice(1));
+}
+
 //globals
 const globals = require("./globals");
 
@@ -525,6 +546,21 @@ const checkoutBranch = (branchName) => {
   let currTreeHash = getObjectFromHash(currCommit).split('\n')[0].split(" ")[1];
   let nextTreeHash = getObjectFromHash(nextCommit).split('\n')[0].split(" ")[1];
   updateFilesFromTrees(currTreeHash, nextTreeHash);
+}
+
+function setUpGlobals(){
+  // let rootDir = "./";
+  // while(pathExists(rootDir+'.legit') && isDir(rootDir+'.legit')){
+  //   rootDir += "../";
+  // }
+  // globals.rootDir = rootDir;
+  console.log("helo");
+}
+
+function initCaller(...args){
+  // legit init
+  // setUpGlobals()
+  console.log(args);
 }
 
 module.exports = {

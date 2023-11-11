@@ -4,11 +4,13 @@
   "description": "Implementing Git with Node.js",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "bin": "pkg src/index.js -o legit"
   },
   "author": "Lemon and hoggy",
   "license": "ISC",
   "dependencies": {
+    "child_process": "^1.0.2",
     "diff": "^5.1.0",
     "hash-files": "^1.1.1",
     "object-hash": "^3.0.0"
