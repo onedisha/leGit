@@ -24,10 +24,10 @@ basic .git structure
  - [x] git commit
  - [x] git log
  - [x] git checkout
+ - [x] git branch
+ - [x] git reset
  - [ ] git status
- - [ ] git branch
  - [ ] git merge
- - [ ] git reset
 ```
 
 ## git init (filename option)
