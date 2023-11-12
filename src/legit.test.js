@@ -74,7 +74,7 @@ describe("utils", () => {
     createDir(".legit/bash/lemon");
     createDir(".legit/zsh/hoggy");
     createDir("king/queen");
-    expect(listPathsInDir("").length).toBe(7);
+    expect(listPathsInDir("./").length).toBe(7);
     let expectedPaths = [
       ".legit",
       "king",
@@ -84,7 +84,7 @@ describe("utils", () => {
       ".legit/bash/lemon",
       ".legit/zsh/hoggy",
     ];
-    expect(listPathsInDir("").sort()).toMatchObject(expectedPaths.sort());
+    expect(listPathsInDir("./").sort()).toMatchObject(expectedPaths.sort());
     deleteDir(".legit");
     deleteDir("king");
   });
