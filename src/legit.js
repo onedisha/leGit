@@ -2,6 +2,7 @@
 const fs = require("fs");
 const objectHash = require("object-hash");
 const zlib = require("node:zlib");
+const { execSync } = require('child_process');
 
 //globals
 const globals = require("./globals");
@@ -111,7 +112,7 @@ function writeToFile(path, data, encoding = "utf-8") {
 function readFile(path, encoding = "utf-8") {
   return fs.readFileSync(globals.rootDir + path, {
     encoding: encoding,
-  });
+  }).replace(/\r\n/g,'\n');
 }
 
 function pathExists(path) {
@@ -472,6 +473,7 @@ function updateRefsWithCommit(commitStr){
 }
 
 function commit(){
+  // TODO shouldnt commit if tree is same
   let root = createTree();
   let commitStr = createCommitStr(root.hash);
   
@@ -682,15 +684,21 @@ function lsCaller(...args){
 }
 
 function commitCaller(...args){
-  // need to support -m option and also using code to edit message option
-  // get message from user, and username from config file.
-  // need to create a new config file in .legit which stores username and email
-  // for now can store it in any format ex: JSON
-  if(args[0]!='-m') {
+  if(args.length==0){
+    execSync(`code -w ${globals.rootDir+".legit/COMMIT_EDITMSG"}`);
+    globals.commitMessage = readFile(globals.rootDir+".legit/COMMIT_EDITMSG")
+                                  .split('\n')
+                                  .filter(line=>{
+                                    return line.trim()[0]!='#'
+                                  });
+  }
+  else if(args.length!=0 && args[0]!='-m') {
     console.log('invalid args');
     return;
   }
-  globals.commitMessage = args.slice(1).join(" ");
+  else{
+    globals.commitMessage = args.slice(1).join(" ");
+  }
   let configLines = readFile(".legit/config").split("\n");
   configLines.forEach((line) => {
     if(line.split(" ")[0] == "name"){
