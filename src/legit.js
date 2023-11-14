@@ -112,7 +112,7 @@ function writeToFile(path, data, encoding = "utf-8") {
 function readFile(path, encoding = "utf-8") {
   return fs.readFileSync(globals.rootDir + path, {
     encoding: encoding,
-  }).replace(/\r\n/g,'\n');
+  }).toString().replace(/\r\n/g,'\n');
 }
 
 function pathExists(path) {
