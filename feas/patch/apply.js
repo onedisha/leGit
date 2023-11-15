@@ -17,41 +17,5 @@ let outfilepath = "out.txt";
 let patchConfig = {
   context: 3,
 };
-let patch = diff.structuredPatch(
-  "old",
-  "new",
-  oldfilestrs,
-  newfilestrs,
-  patchConfig
-);
-if (!patch) exit();
-let hunks = patch.hunks;
-console.log(hunks);
-let oldfilelist = oldfilestrs.split("\n");
-
-let nextOffset = 0;
-let startFromLine = 0;
-for (let hunk of hunks) {
-  let line = hunk.oldStart - 1 + nextOffset;
-  startFromLine = line + hunk.newLines - 1;
-  for (let i = line; i < startFromLine; i++) {
-    outfilestr += hunk.lines[i].slice(1);
-  }
-  nextOffset = hunk.newLines - hunk.oldLines;
-
-  for (let i in hunk.lines) {
-    let line = hunk.lines[i];
-    let action = line[0];
-    line = line.slice(1) + "\n";
-    if (action == " ") {
-      outfilestr += line;
-      i++;
-    } else if (action == "+") {
-      outfilestr += line;
-      line++;
-    } else if (action == "-") {
-    }
-  }
-}
-
-fs.writeFileSync(outfilepath, outfilestr, "utf-8");
+let patch = diff.createPatch("old", "new", oldfilestrs, newfilestrs, patchConfig);
+console.log(patch);

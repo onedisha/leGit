@@ -2,36 +2,37 @@
 const fs = require("fs");
 const objectHash = require("object-hash");
 const zlib = require("node:zlib");
-const { execSync } = require('child_process');
+const path = require("path");
+const { execSync } = require("child_process");
 
 //globals
 const globals = require("./globals");
 
 // commandline parser
 let commands = {
-  'init': initCaller,
-  'add': addCaller,
-  'ls': lsCaller,
-  'commit': commitCaller,
-  'log': logCaller,
-  'branch': branchCaller,
-  'checkout': checkoutCaller,
-  'reset': resetCaller,
-  // 'cat-file' : catFileCaller
-}
+  init: initCaller,
+  add: addCaller,
+  ls: lsCaller,
+  commit: commitCaller,
+  log: logCaller,
+  branch: branchCaller,
+  checkout: checkoutCaller,
+  reset: resetCaller,
+  pc : parseCommitCaller
+};
 
 commandlineParser();
-function commandlineParser(){
+function commandlineParser() {
   let args = process.argv.slice(2);
-  if(args.length==0) {
+  if (args.length == 0) {
     // tests in progress
     return;
   }
-  if(!(args[0] in commands)) {
+  if (!(args[0] in commands)) {
     console.log("invalid command, please try again");
     return;
   }
-  if(args[0]!='init') setUpGlobals();
+  if (args[0] != "init") setUpGlobals();
   commands[args[0]](...args.slice(1));
 }
 
@@ -75,32 +76,34 @@ function createDir(path) {
   });
 }
 
-function listPathsInRoot(path,currDir = ""){
+function listPathsInRoot(path, currDir = "") {
   let childPaths = fs
     .readdirSync(globals.rootDir + path)
     .map((file) => {
-      if(currDir)
-        return currDir+"/"+file.replace(/\\/g, "/")
+      if (currDir) return currDir + "/" + file.replace(/\\/g, "/");
       return file.replace(/\\/g, "/");
     })
     .filter((e) => e);
   let newfiles = [];
-  for(let childPath of childPaths){
-    if(isDir(childPath)){
-      newfiles = [...newfiles,...listPathsInRoot(childPath,childPath)]
+  for (let childPath of childPaths) {
+    if (isDir(childPath)) {
+      newfiles = [...newfiles, ...listPathsInRoot(childPath, childPath)];
     }
   }
-  return [...childPaths,...newfiles];
+  return [...childPaths, ...newfiles];
 }
 
 // ! this is convoluted and ugly like this because of lacking implementation of list paths in Dir
 function listPathsInDir(path) {
-  if(path=="" || path=="./") return listPathsInRoot("");
-  return listPathsInRoot("").filter(line=>{
-    return line && line.slice(0,path.length) == path;
-  }).map(line=>{
-    return line.slice(path.length+1);
-  }).filter(e=>e)
+  if (path == "" || path == "./") return listPathsInRoot("");
+  return listPathsInRoot("")
+    .filter((line) => {
+      return line && line.slice(0, path.length) == path;
+    })
+    .map((line) => {
+      return line.slice(path.length + 1);
+    })
+    .filter((e) => e);
 }
 
 function writeToFile(path, data, encoding = "utf-8") {
@@ -110,9 +113,12 @@ function writeToFile(path, data, encoding = "utf-8") {
 }
 
 function readFile(path, encoding = "utf-8") {
-  return fs.readFileSync(globals.rootDir + path, {
-    encoding: encoding,
-  }).toString().replace(/\r\n/g,'\n');
+  return fs
+    .readFileSync(globals.rootDir + path, {
+      encoding: encoding,
+    })
+    .toString()
+    .replace(/\r\n/g, "\n");
 }
 
 function pathExists(path) {
@@ -240,30 +246,33 @@ function logCommit(file, commitHash) {
 }
 
 function getObjectFromHash(objectHash) {
-  let filePath = `${globals.objectDir}${objectHash.slice(0,2)}/${objectHash.slice(2)}`;
-  return decompress(readFile(filePath,null));
+  let filePath = `${globals.objectDir}${objectHash.slice(
+    0,
+    2
+  )}/${objectHash.slice(2)}`;
+  return decompress(readFile(filePath, null));
 }
 
-function populateChildrenFromTree(treeHash){
+function populateChildrenFromTree(treeHash) {
   let children = [];
   getObjectFromHash(treeHash)
-      .split("\n")
-      .filter((e) => e)
-      .forEach((line) => {
-        let [type, hash, name] = line.split(" ");
-        children.push({
-          type,
-          name,
-          hash,
-        });
+    .split("\n")
+    .filter((e) => e)
+    .forEach((line) => {
+      let [type, hash, name] = line.split(" ");
+      children.push({
+        type,
+        name,
+        hash,
       });
+    });
   return children;
 }
 
 function updateFilesFromTrees(currTreeHash, nextTreeHash, currDir = "") {
   let currTree = [];
   let nextTree = [];
-  
+
   if (currTreeHash != "") currTree = populateChildrenFromTree(currTreeHash);
   nextTree = populateChildrenFromTree(nextTreeHash);
 
@@ -271,7 +280,7 @@ function updateFilesFromTrees(currTreeHash, nextTreeHash, currDir = "") {
     let str = currDir + "/" + nodeName;
     return str.slice(1);
   };
-  
+
   // if blob
   // if name in new and name not in old -> create file and fill file with contents(via hash)
   // if name in old and not in new -> delete file
@@ -285,19 +294,13 @@ function updateFilesFromTrees(currTreeHash, nextTreeHash, currDir = "") {
       }).length === 0
     ) {
       createEmptyFile(getPath(newblob.name));
-      writeToFile(
-        getPath(newblob.name),
-        getObjectFromHash(newblob.hash)
-      );
+      writeToFile(getPath(newblob.name), getObjectFromHash(newblob.hash));
     } else if (
       oldblobs.filter((obj) => {
         return obj.name == newblob.name && obj.hash !== newblob.hash;
       }).length > 0
     ) {
-      writeToFile(
-        getPath(newblob.name),
-        getObjectFromHash(newblob.hash)
-      );
+      writeToFile(getPath(newblob.name), getObjectFromHash(newblob.hash));
     }
   }
 
@@ -350,7 +353,7 @@ function updateFilesFromTrees(currTreeHash, nextTreeHash, currDir = "") {
   }
 }
 
-function init(){
+function init() {
   for (let dir of globals.baseDirs) {
     createDir(dir);
   }
@@ -358,10 +361,10 @@ function init(){
     createEmptyFile(file);
   }
   writeToFile(".legit/HEAD", globals.baseRef);
-  writeToFile(".legit/config",`name lemon\nemail lemon@hoggymail.com`);
-};
+  writeToFile(".legit/config", `name lemon\nemail lemon@hoggymail.com`);
+}
 
-function isInit(){
+function isInit() {
   for (let dir of globals.baseDirs) {
     if (!pathExists(dir)) {
       logMessage(dir + " is missing");
@@ -376,18 +379,20 @@ function isInit(){
     }
   }
   return true;
-};
+}
 
 function createObjectFromFileContent(fileContent) {
   let fileHash = hash(fileContent);
   createDir(globals.objectDir + fileHash.slice(0, 2));
-  let filePath = `${globals.objectDir}${fileHash.slice(0, 2)}/${fileHash.slice(2)}`;
+  let filePath = `${globals.objectDir}${fileHash.slice(0, 2)}/${fileHash.slice(
+    2
+  )}`;
   createEmptyFile(filePath);
   let compressedFile = compress(fileContent);
-  writeToFile(filePath, compressedFile,'utf-8');
+  writeToFile(filePath, compressedFile, "utf-8");
 }
 
-function add(files){
+function add(files) {
   if (!isInit()) {
     logMessage(".legit files missing");
     return;
@@ -405,9 +410,9 @@ function add(files){
   }
 
   writeToFile(globals.indexDir, indexContent);
-};
+}
 
-function addAll(){
+function addAll() {
   if (!isInit()) {
     logMessage(".legit files missing");
     return;
@@ -419,7 +424,7 @@ function addAll(){
   });
 
   add(files);
-};
+}
 
 function isIgnoredFromAdd(file) {
   return file.slice(0, 7) == ".legit/";
@@ -448,7 +453,7 @@ function createTree() {
   return root;
 }
 
-function createCommitStr(treeHash){
+function createCommitStr(treeHash) {
   let commitStr = "";
   let time = new Date();
   time = time.getTime();
@@ -462,7 +467,12 @@ function createCommitStr(treeHash){
   return commitStr;
 }
 
-function updateRefsWithCommit(commitStr){
+function isDetached() {
+  let head = readFile(".legit/HEAD");
+  return head.split(" ")[0] != "ref:";
+}
+
+function updateRefsWithCommit(commitStr) {
   let head = readFile(".legit/HEAD");
   let branch = "";
   if (head.split(" ")[0] != "ref:") throw "can't commit in detached state";
@@ -472,186 +482,284 @@ function updateRefsWithCommit(commitStr){
   writeToFile(branch, hash(commitStr));
 }
 
-function commit(){
-  // TODO shouldnt commit if tree is same
+function noChangesToCommit(treeHash) {
+  let lastCommit = getLastCommit();
+  if (lastCommit) {
+    let lastTree = getObjectFromHash(lastCommit);
+    let lastTreeHash = lastTree.split("\n")[0].split(" ")[1];
+    if (lastTreeHash == treeHash) {
+      console.log("Working directory clean, no changes made since last commit");
+      return true;
+    }
+  }
+  return false;
+}
+
+function commit() {
   let root = createTree();
   let commitStr = createCommitStr(root.hash);
-  
+  if (noChangesToCommit(root.hash)) return;
   createObjectFromFileContent(commitStr);
   updateRefsWithCommit(commitStr);
-};
+}
 
-function log(){
+function log() {
   let lastCommit = getLastCommit();
   if (!lastCommit) {
     console.log("You haven't committed anything");
     return;
   }
-  let file = getObjectFromHash(lastCommit).split('\n');
+  let file = getObjectFromHash(lastCommit).split("\n");
   let parent = file[1].split(" ")[0];
 
   while (parent === "parent") {
     logCommit(file, lastCommit);
     lastCommit = file[1].split(" ")[1];
-    file = getObjectFromHash(lastCommit).split('\n');
+    file = getObjectFromHash(lastCommit).split("\n");
     parent = file[1].split(" ")[0];
   }
   logCommit(file, lastCommit);
-};
+}
 
-function checkoutCommit(nextCommit){
+function checkoutCommit(nextCommit) {
   let currCommit = getLastCommit();
   writeToFile(".legit/HEAD", nextCommit);
-  
-  let currTreeHash = getObjectFromHash(currCommit).split('\n')[0].split(" ")[1];
-  let nextTreeHash = getObjectFromHash(nextCommit).split('\n')[0].split(" ")[1];
-  updateFilesFromTrees(currTreeHash, nextTreeHash);
-};
 
-function createBranch(branchName){
+  let currTreeHash = getObjectFromHash(currCommit).split("\n")[0].split(" ")[1];
+  let nextTreeHash = getObjectFromHash(nextCommit).split("\n")[0].split(" ")[1];
+  updateFilesFromTrees(currTreeHash, nextTreeHash);
+}
+
+function createBranch(branchName) {
   // create new dir/file in refs/heads/branchname
   let dirs = branchName.split("/").slice(0, -1).join("/");
   let branch = branchName.split("/").slice(-1)[0];
-  createDir(globals.headsDir+dirs);
-  createEmptyFile(globals.headsDir+branchName);
- // copy the contents if the current branch, pointed to by HEAD into the new file
+  createDir(globals.headsDir + dirs);
+  createEmptyFile(globals.headsDir + branchName);
+  // copy the contents if the current branch, pointed to by HEAD into the new file
   let lastCommit = getLastCommit();
-  writeToFile(globals.headsDir+branchName,lastCommit);
+  writeToFile(globals.headsDir + branchName, lastCommit);
 }
 
-function getCurrentBranch(){
-  let head = readFile('.legit/HEAD').split("\n")[0].split(" ");
-  if(head.length == 1) return false;
+function getCurrentBranch() {
+  let head = readFile(".legit/HEAD").split("\n")[0].split(" ");
+  if (head.length == 1) return false;
   let ref = head.slice(-1)[0];
   return ref.split("/").slice(2).join("/");
 }
 
-function listBranches(){
+function listBranches() {
   // TODO fix the list in dir function when ti ends with a /
-  let allPaths = listPathsInDir(globals.headsDir.slice(0,-1)).filter(path=>{
-    return isFile(globals.headsDir+path);
-  }); 
+  let allPaths = listPathsInDir(globals.headsDir.slice(0, -1)).filter(
+    (path) => {
+      return isFile(globals.headsDir + path);
+    }
+  );
 
   let currentBranch = getCurrentBranch();
-  if(!currentBranch) {
-    console.log(`  ${globals.greenColor}(HEAD in detached state) at ${getLastCommit()}${globals.resetColor}`);
+  if (!currentBranch) {
+    console.log(
+      `  ${globals.greenColor}(HEAD in detached state) at ${getLastCommit()}${
+        globals.resetColor
+      }`
+    );
   }
-  
-  for(path of allPaths){
-    if(currentBranch==path){
-      console.log(`* ${globals.greenColor}${path}${globals.resetColor}`)
-    }
-    else{
+
+  for (path of allPaths) {
+    if (currentBranch == path) {
+      console.log(`* ${globals.greenColor}${path}${globals.resetColor}`);
+    } else {
       console.log(`  ${path}`);
     }
   }
 }
 
-function getBranches(){
-  return allPaths = listPathsInDir(globals.headsDir.slice(0,-1)).filter(path=>{
-    return isFile(globals.headsDir+path);
-  }); 
+function getBranches() {
+  return (allPaths = listPathsInDir(globals.headsDir.slice(0, -1)).filter(
+    (path) => {
+      return isFile(globals.headsDir + path);
+    }
+  ));
 }
 
-function isValidBranch(branchName){
-  let branchFile = globals.headsDir+branchName;
-  if(!pathExists(branchFile)) return false;
-  let commitHash = readFile(branchFile).split("\n").filter(e=>e)[0];
-  let filePath = `${globals.objectDir}${commitHash.slice(0,2)}/${commitHash.slice(2)}`;
-  if(pathExists(filePath) && isFile(filePath)) return true;
+function isValidBranch(branchName) {
+  let branchFile = globals.headsDir + branchName;
+  if (!pathExists(branchFile)) return false;
+  let commitHash = readFile(branchFile)
+    .split("\n")
+    .filter((e) => e)[0];
+  let filePath = `${globals.objectDir}${commitHash.slice(
+    0,
+    2
+  )}/${commitHash.slice(2)}`;
+  if (pathExists(filePath) && isFile(filePath)) return true;
   return false;
 }
 
-function getCommitFromBranch(branchName){
-  let branchFile = globals.headsDir+branchName;
-  let commitHash = readFile(branchFile).split("\n").filter(e=>e)[0];
+function getCommitFromBranch(branchName) {
+  let branchFile = globals.headsDir + branchName;
+  let commitHash = readFile(branchFile)
+    .split("\n")
+    .filter((e) => e)[0];
   return commitHash;
-} 
+}
 
-function checkoutBranch(branchName){
+function checkoutBranch(branchName) {
   let currCommit = getLastCommit();
 
-  if(!isValidBranch(branchName)) {
+  if (!isValidBranch(branchName)) {
     console.log("invalid branch name");
     return;
   }
   let nextCommit = getCommitFromBranch(branchName);
 
-  writeToFile('.legit/HEAD', `ref: refs/heads/${branchName}`);
+  writeToFile(".legit/HEAD", `ref: refs/heads/${branchName}`);
 
-  let currTreeHash = getObjectFromHash(currCommit).split('\n')[0].split(" ")[1];
-  let nextTreeHash = getObjectFromHash(nextCommit).split('\n')[0].split(" ")[1];
+  let currTreeHash = getObjectFromHash(currCommit).split("\n")[0].split(" ")[1];
+  let nextTreeHash = getObjectFromHash(nextCommit).split("\n")[0].split(" ")[1];
   updateFilesFromTrees(currTreeHash, nextTreeHash);
 }
 
-function reset(mode, commit){
-  if(!fullCommitHash(commit)) {
+function reset(mode, commit) {
+  if (!fullCommitHash(commit)) {
     console.log("invalid Commit");
     return;
   }
   let currCommit = getLastCommit();
   let currBranch = getCurrentBranch();
-  writeToFile(globals.headsDir+currBranch, fullCommitHash(commit));
-  
-  if(mode == "--mixed"){
-    writeToFile(globals.indexDir, "");
-  }
+  writeToFile(globals.headsDir + currBranch, fullCommitHash(commit));
 
-  else if(mode == "--hard"){
+  if (mode == "--mixed") {
     writeToFile(globals.indexDir, "");
-    let currTreeHash = getObjectFromHash(currCommit).split('\n')[0].split(" ")[1];
-    let nextTreeHash = getObjectFromHash(fullCommitHash(commit)).split('\n')[0].split(" ")[1];
+  } else if (mode == "--hard") {
+    writeToFile(globals.indexDir, "");
+    let currTreeHash = getObjectFromHash(currCommit)
+      .split("\n")[0]
+      .split(" ")[1];
+    let nextTreeHash = getObjectFromHash(fullCommitHash(commit))
+      .split("\n")[0]
+      .split(" ")[1];
     updateFilesFromTrees(currTreeHash, nextTreeHash);
   }
 }
 
-function merge(){
+function merge(branchName) {
+  // two types of merge
+  // true merge and fast forward merge
+  // ! fast Forward merge
+  // A -- B -- C - main (.legit/HEAD)
+  //            \
+  //             D -- E - feature (passed as arg)
+  // A -- B -- C -- D -- E - feature,Main
+  //
+  // ! true merge
+  // A -- B -- C -- F
+  //            \
+  //             D -- E -feature
+  // A -- B -- C -- F -- E' (Tree of E,F) - Main (running merge from main)
+  //            \      /
+  //             D -- E -feature
+  //
+  // ! steps for fast forward merge
+  // get current branch from .legit/HEAD
+  // find ancestor branch -
+  // change current branch commit hash to commit hash of branch to be merged
 
+  let currCommit = getLastCommit();
+  let branchCommit = readFile(globals.headsDir + branchName);
+  let ancestorCommit = getCommonAncestor(currCommit, branchCommit);
+  if (ancestorCommit == currCommit) {
+    // ! fast forword merge
+    console.log("Fast Farwording Merge");
+    let currBranch = getCurrentBranch();
+    writeToFile(globals.headsDir + currBranch, branchCommit);
+  } else {
+    console.log("cannot merge this, true merge coming soon :)");
+  }
 }
 
-function setUpGlobals(){
-  let currDir = process.cwd().replace(/\\/g,'/').split("/");
+function parseCommit(commitHash) {
+  let file = getObjectFromHash(commitHash).split("\n");
+  let commitDetails = {};
+  for(let line = 0; line<file.length; line++){
+    if(file[line]=='') {
+      commitDetails['message'] = file.slice(line+1,-1).join('\n');
+      break;
+    }
+    let key = file[line].split(" ")[0];
+    let value = file[line].split(" ")[1];
+    commitDetails[key]=value;
+  }
+  return commitDetails;
+}
+
+function parseCommitCaller(){
+  console.log(parseCommit('e75457da3ac36fc2f29bc2d23644c5a9f9aeceb7').message);
+}
+
+function getCommonAncestor(commitA, commitB) {
+  // TODO incomplete function
+  if(commitA==commitB) return commitA;
+  let commits = new Set();
+  commits.add(commitA);
+  commits.add(commitB);
+  while ("parent" in parseCommit(commitA) && "parent" in parseCommit(commitB)) {
+    commits.add(parseCommit(commitA).parent);
+    commitA = parseCommit(commitA).parent;
+    commits.add(parseCommit(commitB).parent);
+    commitB = parseCommit(commitB).parent;
+  }
+  return "";
+}
+
+function setUpGlobals() {
+  let currDir = process.cwd().replace(/\\/g, "/").split("/");
+  let parentsDepth = currDir.length - 1;
   let rootDir = "./";
   let fromLast = 0;
-  while(!(pathExists(rootDir+'.legit') && isDir(rootDir+'.legit'))){
+  while (
+    parentsDepth-- &&
+    !(pathExists(rootDir + ".legit") && isDir(rootDir + ".legit"))
+  ) {
     rootDir += "../";
     fromLast++;
   }
-  globals.rootDir = rootDir;
-  if(fromLast!=0)
-    globals.rootToWorkingPath = currDir.slice(-fromLast).join("/")+"/";
-}
-
-function fullCommitHash(partialHash){
-  // limit of characters needed: 3
-  let hashDir = globals.objectDir+partialHash.slice(0,2);
-  let restOfHash = partialHash.slice(2);
-  if(pathExists(hashDir)){
-    let objects = listPathsInDir(hashDir);
-    let matches = objects.filter(obj=>{
-      return obj.slice(0,restOfHash.length) == restOfHash;
-    })
-    if(matches.length == 0){
-      return "";
-    }
-    else if(matches.length>1){
-      console.log('ambiguous commit hash, provide longer hash');
-      return "";
-    }
-    else{
-      return partialHash.slice(0,2) + matches[0];
-    }
+  if (parentsDepth <= 0) {
+    console.log("git repository not initialised");
+    process.exit();
   }
-  else return "";
+  globals.rootDir = rootDir;
+  if (fromLast != 0)
+    globals.rootToWorkingPath = currDir.slice(-fromLast).join("/") + "/";
 }
 
-function initCaller(...args){
-  globals.rootDir = process.cwd().replace(/\\/g,'/')+"/";
+function fullCommitHash(partialHash) {
+  // limit of characters needed: 3
+  let hashDir = globals.objectDir + partialHash.slice(0, 2);
+  let restOfHash = partialHash.slice(2);
+  if (pathExists(hashDir)) {
+    let objects = listPathsInDir(hashDir);
+    let matches = objects.filter((obj) => {
+      return obj.slice(0, restOfHash.length) == restOfHash;
+    });
+    if (matches.length == 0) {
+      return "";
+    } else if (matches.length > 1) {
+      console.log("ambiguous commit hash, provide longer hash");
+      return "";
+    } else {
+      return partialHash.slice(0, 2) + matches[0];
+    }
+  } else return "";
+}
+
+function initCaller(...args) {
+  globals.rootDir = process.cwd().replace(/\\/g, "/") + "/";
   init();
 }
 
-function addCaller(...args){
-  if(['-A','--all'].includes(args[0])){
+function addCaller(...args) {
+  if (["-A", "--all"].includes(args[0])) {
     addAll();
     return;
   }
@@ -668,93 +776,91 @@ function addCaller(...args){
   // }
 
   // TODO need to add ../ resolution support
-  let files = args.map(file=> {return globals.rootToWorkingPath+file} )
-  for(let file of files){
-    if(!(pathExists(file) && isFile(file))){
-      console.log(`fatal: pathspec '${file}' did not match any files`)
-      return; 
-    } 
+  let files = args.map((file) => {
+    return globals.rootToWorkingPath + file;
+  });
+  for (let file of files) {
+    if (!(pathExists(file) && isFile(file))) {
+      console.log(`fatal: pathspec '${file}' did not match any files`);
+      return;
+    }
   }
   add(files);
 }
 
-function lsCaller(...args){
-  if(args.length==0) args = [''];
-  console.log(listPathsInDir(globals.rootToWorkingPath+args[0]));
+function lsCaller(...args) {
+  if (args.length == 0) args = [""];
+  console.log(listPathsInDir(globals.rootToWorkingPath + args[0]));
 }
 
-function commitCaller(...args){
-  if(args.length==0){
-    execSync(`code -w ${globals.rootDir+".legit/COMMIT_EDITMSG"}`);
-    globals.commitMessage = readFile(globals.rootDir+".legit/COMMIT_EDITMSG")
-                                  .split('\n')
-                                  .filter(line=>{
-                                    return line.trim()[0]!='#'
-                                  });
-  }
-  else if(args.length!=0 && args[0]!='-m') {
-    console.log('invalid args');
+function commitCaller(...args) {
+  if (args.length == 0) {
+    execSync(`code -w ${globals.rootDir + ".legit/COMMIT_EDITMSG"}`);
+    globals.commitMessage = readFile(globals.rootDir + ".legit/COMMIT_EDITMSG")
+      .split("\n")
+      .filter((line) => {
+        return line.trim()[0] != "#";
+      });
+  } else if (args.length != 0 && args[0] != "-m") {
+    console.log("invalid args");
     return;
-  }
-  else{
+  } else {
     globals.commitMessage = args.slice(1).join(" ");
   }
   let configLines = readFile(".legit/config").split("\n");
   configLines.forEach((line) => {
-    if(line.split(" ")[0] == "name"){
+    if (line.split(" ")[0] == "name") {
       globals.username = line.split(" ")[1];
     }
-    if(line.split(" ")[0] == "email"){
+    if (line.split(" ")[0] == "email") {
       globals.email = line.split(" ")[1];
     }
-  })
-  console.log(globals.commitMessage,globals.username, globals.email)
-  if(globals.commitMessage && globals.username && globals.email) commit();
+  });
+  // console.log(globals.commitMessage,globals.username, globals.email)
+  if (globals.commitMessage && globals.username && globals.email) commit();
   else console.log("invalid message or config info");
 }
 
-function logCaller(...args){
+function logCaller(...args) {
   log();
 }
 
-function branchCaller(...args){
-  if(args.length === 0){
+function branchCaller(...args) {
+  if (args.length === 0) {
     listBranches();
-  }
-  else{
+  } else {
     createBranch(args[0]);
   }
 }
 
-function checkoutCaller(...args){
+function checkoutCaller(...args) {
   let branches = getBranches();
-  if(args[0] == '-b'){
-    if(branches.includes(args[1])){
+  if (args[0] == "-b") {
+    if (branches.includes(args[1])) {
       console.log("error: branch already exists");
       return;
-    }
-    else{
+    } else {
       createBranch(args[1]);
-      writeToFile('.legit/HEAD',`ref: refs/heads/${args[1]}`);
+      writeToFile(".legit/HEAD", `ref: refs/heads/${args[1]}`);
     }
-  }
-  else if(branches.includes(args[0])){
+  } else if (branches.includes(args[0])) {
     checkoutBranch(args[0]);
-  }
-  else if(fullCommitHash(args[0])){
+  } else if (fullCommitHash(args[0])) {
     checkoutCommit(fullCommitHash(args[0]));
-  }
-  else{
+  } else {
     console.log("error: invalid arguments");
   }
 }
 
-function resetCaller(...args){
-  if(!['--soft','--mixed','--hard'].includes(args[0])) {
-    reset('--mixed',args[0]);
-  }
-  else 
-    reset(args[0],args[1]);
+function resetCaller(...args) {
+  if (!["--soft", "--mixed", "--hard"].includes(args[0])) {
+    reset("--mixed", args[0]);
+  } else reset(args[0], args[1]);
+}
+
+function mergeCaller(...args) {
+  // branch name is args[0]
+  merge(args[0]);
 }
 
 module.exports = {
