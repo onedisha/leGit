@@ -23,8 +23,6 @@ The followings are implemented in leGit and work similarly as in git, with the o
 ## Differences from git
 
 While these commands work similarly there are a few differences to note:
-- all the commands first find the root directory of the project by trying to check the persnt of the current directory recursively, currently if the project is not initialised, this check goes into an infinite loop, so be mindful of that, it will be fixed soon.
-- As of now commit does not check if the working tree is clean before commiting, this is easy to fix and will be changed in the following commits,
 - log does not list the names of the branches along side the commit and only lists the commits
 - reset --mixed and --hard do not restore the index file to how it was during the target commit but clear them instead so there is a need to add again as required
 - the implementation does not implement plumbing commands underneath
