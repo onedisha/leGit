@@ -38,6 +38,9 @@ let {
   getCurrentBranch,
   checkoutBranch,
   getCommitFromBranch,
+  getCommonAncestor,
+  parseCommit,
+  merge,
   // globals
   globals,
 } = require("./legit.js");
@@ -324,12 +327,188 @@ describe("core functions", () => {
     expect(pathExists("g.md")).toBe(true);
   })
 
-  test("haha",()=>{
+  test("merge-ff",()=>{
+    deleteDir("");
+    init();
 
+    createDir("a");
+    createEmptyFile("a/b.js");
+    writeToFile("a/b.js", 'console.log("first commit");');
+    createEmptyFile("a/c.txt");
+    writeToFile("a/c.txt", "this is a text file of first commit");
+    // commit
+    addAll();
+    commit();
+    // 4c17dd624ee9e753680572553f9ab006998d73c0
+    createBranch('feat');
+    createBranch('merge');
+    writeToFile("a/b.js", 'console.log("second commit");');
+    writeToFile("a/c.txt", "this is a text file of second commit");
+    addAll();
+    commit();
+    // 7b4b2407cdf826a32c5b52cb14bae13bfde37842
+    expect(parseCommit('7b4b2407cdf826a32c5b52cb14bae13bfde37842').parent).toBe('4c17dd624ee9e753680572553f9ab006998d73c0');
+    expect(getCommonAncestor('7b4b2407cdf826a32c5b52cb14bae13bfde37842','4c17dd624ee9e753680572553f9ab006998d73c0')).toBe('4c17dd624ee9e753680572553f9ab006998d73c0');
+    // create two branches
+    checkoutBranch('feat');
+    writeToFile("a/b.js", 'console.log("third feat commit");');
+    writeToFile("a/c.txt", "this is a text file of third feat commit");
+    addAll();
+    commit();
+    // a3de53759cfee2505b35d691d301aa79dcc0ae42
+    expect(parseCommit('a3de53759cfee2505b35d691d301aa79dcc0ae42').parent).toBe('4c17dd624ee9e753680572553f9ab006998d73c0');
+    expect(getCommonAncestor('a3de53759cfee2505b35d691d301aa79dcc0ae42','7b4b2407cdf826a32c5b52cb14bae13bfde37842')).toBe('4c17dd624ee9e753680572553f9ab006998d73c0');
+    
+    // fast forward merge of feat into merge
+    // ! before merge
+    // 4c17 -- 7b4b --(main)
+    //  | \
+    //  |  a3de -- (feat)
+    //  (merge)
+    checkoutBranch('merge');
+    expect(getLastCommit()).toBe('4c17dd624ee9e753680572553f9ab006998d73c0');
+    merge('feat');
+    expect(getLastCommit()).toBe('a3de53759cfee2505b35d691d301aa79dcc0ae42');
+    // ! after merge
+    // 4c17 -- 7b4b --(main)
+    //    \
+    //     a3de -- (feat,merge)
+
+    // true merge of feat into main
+    // 
+    
   })
 
-  deleteDir("");
-
+  
+  test('merge-true',()=>{
+    deleteDir("");
+    clearLogs();
+    init();
+    // first/fifth
+    //  /a.md -> this is a
+    //  /b.md -> this is b
+    // second/sixth
+    //  /c.md -> this is c
+    //  /d.md -> this is d
+    // third
+    //  e.md -> this is e
+    let dirs = ['first/fifth','second/sixth','third'];
+    let files = [
+      ['first/fifth/a.md',"this is a"],
+      ['first/fifth/b.md',"this is b"],
+      ['second/sixth/c.md',"this is c"],
+      ['second/sixth/d.md',"this is d"],
+      ['third/e.md',"this is e"]
+    ]
+    for(let dir of dirs){
+      createDir(dir);
+    }
+    for(let [name,content] of files){
+      createEmptyFile(name);
+      writeToFile(name,content);
+    }
+    addAll();
+    globals.commitMessage = "merge Base";
+    commit();
+    createBranch('feat');
+    log();
+    // first/fifth
+    //  /a.md -> this is a in main // modified in main
+    //  /b.md -> this is b // deleted in both
+    // second/sixth
+    //  /c.md -> this is c // no change in both
+    //  /d.md -> this is d // delete this in main
+    //  /e.md -> this is e new in main // created in main
+    // third // delete Dir in main ignore in 
+    //  e.md -> this is e
+    // fourth // created in main
+    //  /ff.md -> this is ff
+    dirs = ['fourth'];
+    files = [
+      ['first/fifth/a.md',"this is a in main"],
+      ['second/sixth/e.md',"this is d"],
+      ['fourth/ff.md',"this is ff"]
+    ]
+    let delFiles = [
+      'first/fifth/b.md',
+      'second/sixth/d.md',
+    ]
+    let delDirs = ['third'];
+    for(let dir of dirs){
+      createDir(dir);
+    }
+    for(let [name,content] of files){
+      if(!pathExists(name))
+        createEmptyFile(name);
+      writeToFile(name,content);
+    }
+    for(let files of delFiles){
+      deleteFile(files);
+    }
+    for(let dir of delDirs){
+      deleteDir(dir);
+    }
+    addAll();
+    globals.commitMessage = "main second modification commit";
+    commit();
+    log();
+    checkoutBranch('feat');
+    // first/fifth
+    //  /a.md -> this is a in main // modified in main
+    //  /b.md -> this is b // deleted in both
+    // second/sixth
+    //  /c.md -> this is c // no change in both
+    //  /d.md -> this is d // delete this in main
+    //  /e.md -> this is e new in main // created in main
+    // third // delete in both
+    //  e.md -> this is e
+    // fourthe // created in feat
+    //  /ff.md -> this is ff
+    dirs = ['fourthe'];
+    files = [
+      ['fourthe/ff.md',"this is ff"]
+    ]
+    delFiles = [
+      'first/fifth/b.md'
+    ]
+    delDirs = [
+      'third'
+    ]
+    for(let dir of dirs){
+      createDir(dir);
+    }
+    for(let [name,content] of files){
+      if(!pathExists(name))
+        createEmptyFile(name);
+      writeToFile(name,content);
+    }
+    for(let files of delFiles){
+      deleteFile(files);
+    }
+    for(let dir of delDirs){
+      deleteDir(dir);
+    }
+    addAll();
+    globals.commitMessage = "this is feat commit";
+    commit();
+    log();
+    checkoutBranch('main');
+    merge('feat');
+    // log();
+    savedLog(logs.flat().join('\n'));
+    // first/fifth
+    //  /a.md -> this is a in main // modified in main
+    //  /b.md -> this is b // deleted in both
+    // second/sixth
+    //  /c.md -> this is c // no change in both
+    //  /d.md -> this is d // delete this in main
+    //  /e.md -> this is d // created in main
+    // third // delete in both
+    //  e.md -> this is e
+    // fourthe // created in feat
+    //  /ff.md -> this is ff
+    deleteDir("");
+  })
   // test('edge cases for the above when empty strings are added in the end of a file')
   // test('when the order of files change in commit messages)
 

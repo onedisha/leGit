@@ -453,13 +453,19 @@ function createTree() {
   return root;
 }
 
-function createCommitStr(treeHash) {
+function createCommitStr(treeHash,mergeParent = null) {
   let commitStr = "";
   let time = new Date();
   time = time.getTime();
   commitStr += `tree ${treeHash}\n`;
-  let parentCommit = getLastCommit();
-  if (parentCommit) commitStr += `parent ${parentCommit}\n`;
+  if(mergeParent == null){
+    let parentCommit = getLastCommit();
+    if (parentCommit) commitStr += `parent ${parentCommit}\n`;
+  }
+  else{
+    commitStr += `parent ${mergeParent.currCommit}\n`;
+    commitStr += `parent ${mergeParent.incomingCommit}\n`;
+  }
   commitStr += `author ${globals.username} <${globals.email}> ${time}\n`;
   commitStr += `committer ${globals.username} <${globals.email}> ${time}\n`;
   commitStr += `\n`;
@@ -504,6 +510,7 @@ function commit() {
 }
 
 function log() {
+  // !!! TODO log is not functioning coz of merge fix it
   let lastCommit = getLastCommit();
   if (!lastCommit) {
     console.log("You haven't committed anything");
@@ -565,7 +572,7 @@ function listBranches() {
     );
   }
 
-  for (path of allPaths) {
+  for (let path of allPaths) {
     if (currentBranch == path) {
       console.log(`* ${globals.greenColor}${path}${globals.resetColor}`);
     } else {
@@ -643,39 +650,395 @@ function reset(mode, commit) {
   }
 }
 
-function merge(branchName) {
-  // two types of merge
-  // true merge and fast forward merge
-  // ! fast Forward merge
-  // A -- B -- C - main (.legit/HEAD)
-  //            \
-  //             D -- E - feature (passed as arg)
-  // A -- B -- C -- D -- E - feature,Main
-  //
-  // ! true merge
-  // A -- B -- C -- F
-  //            \
-  //             D -- E -feature
-  // A -- B -- C -- F -- E' (Tree of E,F) - Main (running merge from main)
-  //            \      /
-  //             D -- E -feature
-  //
-  // ! steps for fast forward merge
-  // get current branch from .legit/HEAD
-  // find ancestor branch -
-  // change current branch commit hash to commit hash of branch to be merged
+// function status(){
+//   if(!isInit()){
+//     console.log("error: .legit not initialised");
+//     return;
+//   }
 
+//   let currBranch = getCurrentBranch();
+//   if(!currBranch){
+//       let commitHash = readFile(".legit/HEAD").slice(0, 7); 
+//       let message = parseCommit(commitHash).message;
+//       console.log(`HEAD detached at ${commitHash} ${message}`);
+//   }
+//   else{
+//     console.log(`On branch ${currBranch}`);
+//   }
+
+//   let commitFiles = listPathsInDir(globals.objectDir).filter((file) => {
+//     return isFile(file); //stores commit hashes
+//   });
+//   let workingDirFiles = listPathsInDir("").filter((file) => {
+//     return isFile(file) && !isIgnoredFromAdd(file);
+//   }); // stores files in working dir
+//   let indexFiles = readFile(globals.indexDir).split("\n").filter((line) => line.length != 0).map((line) => {
+//     let [hash, path] = line.split(" ");
+//     return path;
+//   }); // stores files staged
+
+//   if(commitFiles.length == 0) console.log("No commits yet");
+
+//   if(workingDirFiles.length == 0 && commitFiles.length == 0 && indexFiles.length == 0){
+//     console.log("nothing to commit (create/copy files and use 'git add' to track)");
+//     return;
+//   }
+
+//   let X = CvW(); //* Rename : array representing changes bw lastcommit and working dir
+//   let Y = CvsI(); //* Rename : array representing changes bw lastCommit and staged files
+//   let Z = IvsW(); //* Rename : array representing changes bw index files and working dir
+//   if(indexFiles.length == 0 && X.length == 0){
+//     console.log("nothing to commit, working tree clean");
+//     return;
+//   }
+  
+//   if(indexFiles.length > 0){
+//     console.log("Changes to be commited:");
+//     //*console.log(in green : newfiles, modififed, deleted based on Y);
+//   }
+
+//   //* console.log("Changes not staged for commit:"); 
+//   //! in red: if Z or X has anything in deleted files: console.log("deleted: filename");
+//   //! if Z or X has anything in modified files: console.log("modified: filename");
+  
+
+//   //* console.log("Untracked files:");
+//   //! in red: if Z and X both have it in new files: 
+//   //* console.log("  (use "git add <file>..." to include in what will be committed)");
+//   //* console.log(filename);
+// }
+
+// function getPathFromTree(commitHash){
+//   let lastCommit = getLastCommit();
+//   if(!lastCommit) return;
+//   let tree = parseCommit(lastCommit).tree;
+// }
+
+// function compareFiles(object1, object2){
+
+// }
+
+// function hashWorkingDirFiles(){
+//   let workingDirFiles = {};
+//   let files = listPathsInDir("").filter((file) => {
+//     return isFile(file) && !isIgnoredFromAdd(file);
+//   });
+//   for(let file of files){
+//     let h = hash(readFile(file));
+//     workingDirFiles[file] = h;
+//   }
+//   return workingDirFiles;
+// }
+
+function merge(branchName) {
   let currCommit = getLastCommit();
-  let branchCommit = readFile(globals.headsDir + branchName);
-  let ancestorCommit = getCommonAncestor(currCommit, branchCommit);
-  if (ancestorCommit == currCommit) {
+  let incomingCommit = readFile(globals.headsDir + branchName);
+  let mergeBase = getCommonAncestor(currCommit, incomingCommit);
+  if (mergeBase == currCommit) {
     // ! fast forword merge
+    // A -- B -- C - main (.legit/HEAD)
+    //            \
+    //             D -- E - feature (passed as arg)
+    // A -- B -- C -- D -- E - feature,Main
+    //
     console.log("Fast Farwording Merge");
     let currBranch = getCurrentBranch();
-    writeToFile(globals.headsDir + currBranch, branchCommit);
+    writeToFile(globals.headsDir + currBranch, incomingCommit);
   } else {
-    console.log("cannot merge this, true merge coming soon :)");
+    // ! true merge 
+    // A -- B -- C -- F
+    //            \
+    //             D -- E -feature
+    // A -- B -- C -- F -- E' (Tree of E,F) - Main (running merge from main)
+    //            \      /
+    //             D -- E -feature
+    //
+    // ! steps for when no merge conflict 
+    // ! conflict only occurs when the same file is modified
+    // find merge base 
+    // get trees from merge base, current commit, and incoming commit
+    let baseTree = getTreeFromHash(parseCommit(mergeBase).tree, "root");
+    let currTree = getTreeFromHash(parseCommit(currCommit).tree, "root");
+    let incomingTree = getTreeFromHash(parseCommit(incomingCommit).tree, "root");
+
+    // calculate hashes for new tree
+    let mergedTree = getMergedTree(baseTree,currTree,incomingTree);
+    
+    // create a new commit while asking for commit message,
+    globals.commitMessage = "merge commit";
+    execSync(`code -w ${globals.rootDir + ".legit/COMMIT_EDITMSG"}`);
+    globals.commitMessage = readFile(".legit/COMMIT_EDITMSG")
+      .split("\n")
+      .filter((line) => {
+        return line.trim()[0] != "#";
+      }).join("");
+    
+    // new commit
+    let commitStr = createCommitStr(mergedTree.hash,{currCommit,incomingCommit});
+    console.log(commitStr);
+    let commitHash = hash(commitStr);
+    createObjectFromFileContent(commitStr);
+
+    // update refs
+    let currBranch = getCurrentBranch();
+    writeToFile(globals.headsDir + currBranch, commitHash);
+
+    // update working dir
+    let currTreeHash = parseCommit(currCommit).tree;
+    let nextTreeHash = mergedTree.hash;
+    updateFilesFromTrees(currTreeHash, nextTreeHash);
   }
+}
+
+function getMergedTree(baseTree,currTree,incomingTree){
+  //  ! !!!!!!! need to deal with case where there is an empty line in treeNode
+  
+  // with the copy of merge base tree, recursively,
+  let mergeTree = {name: baseTree.name, type:'tree'};
+
+  // if blob
+    // * existing files
+      // ? different hashes in base, incoming and curr for same file - (both curr/incoming modified same file) -  
+        // conflict
+      // ? existing file has same hash in one of incoming/curr, and a new hash in the other - (one of curr/incoming modified) - 
+        // take the modified hash
+      // ? file has same hash in incoming and curr
+        // take the hash
+    // * creation
+      // ? different hashes in incoming and curr for same file - (both curr/incoming created same file with diff content -  
+        // conflict
+      // ? same hash for file in incoming and curr - (both curr/incoming, created same exact file)
+        // take the hash and add file
+      // ? if a filename only is in curr xor incoming - 
+        // take the hash and add the file to tree
+    // * deletion
+      // ? if file name is present in base and one of curr or incoming with a different hash - (deleted by one and modified but other)
+        // conflict
+      // ? if a filename from base is present in curr or incoming with same hash - (has been deleted by one or both of incoming or curr)
+        // do not add file
+        
+  let mergeBlobs = [];
+  let baseBlobs = {}; 
+  baseTree && baseTree.children.filter(child=>{
+    return child.type=='blob';
+  }).forEach(blobObj=>{
+    baseBlobs[blobObj.name] = blobObj.hash;
+  })
+  let currBlobs = {};
+  currTree && currTree.children.filter(child=>{
+    return child.type=='blob';
+  }).forEach(blobObj=>{
+    currBlobs[blobObj.name] = blobObj.hash;
+  })
+  let incomingBlobs = {};
+  incomingTree && incomingTree.children.filter(child=>{
+    return child.type=='blob';
+  }).forEach(blobObj=>{
+    incomingBlobs[blobObj.name] = blobObj.hash;
+  })
+  
+  for(let file in baseBlobs){
+    if((file in currBlobs) && (file in incomingBlobs)){
+      // ! files are modified
+      if(currBlobs[file] == incomingBlobs[file]){
+        mergeBlobs.push({'type': 'blob', 'hash': currBlobs[file], 'name': file});
+      }
+      else if((currBlobs[file] != baseBlobs[file]) && (incomingBlobs[file] == baseBlobs[file])){
+        mergeBlobs.push({'type': 'blob', 'hash': currBlobs[file], 'name': file});
+      }
+      else if((currBlobs[file] == baseBlobs[file]) && (incomingBlobs[file] != baseBlobs[file])){
+        mergeBlobs.push({'type': 'blob', 'hash': incomingBlobs[file], 'name': file});
+      }
+      else{
+        console.log(`Conflict in file ${file}`);
+      }
+    }
+    // ! when files are deleted
+    else if(!(file in currBlobs) && (file in incomingBlobs)){
+      if(incomingBlobs[file]==baseBlobs[file]){
+        continue;
+      }
+      else{
+        console.log(`Conflict in file ${file}`);
+      }
+    }
+    else if((file in currBlobs) && !(file in incomingBlobs)){
+      if(currBlobs[file]==baseBlobs[file]){
+        continue;
+      }
+      else{
+        console.log(`Conflict in file ${file}`);
+      }
+    }
+    else {
+      continue;
+    }
+  }
+
+  // ! when files are created
+  for(let file in currBlobs){
+    if(!(file in baseBlobs) && !(file in incomingBlobs)){
+      mergeBlobs.push({'type': 'blob', 'hash': currBlobs[file], 'name': file});
+    }
+    else if(!(file in baseBlobs) && (file in incomingBlobs)){
+      if(incomingBlobs[file] != currBlobs[file]) {
+        console.log(`Conflict in file ${file}`);
+      }
+      else {
+        mergeBlobs.push({'type': 'blob', 'hash': currBlobs[file], 'name': file});
+      }
+    }
+  }
+
+  for(let file in incomingBlobs){
+    if(!(file in baseBlobs) && !(file in currBlobs)){
+      mergeBlobs.push({'type': 'blob', 'hash': incomingBlobs[file], 'name': file});
+    }
+    // other conditions taken care in previous loop
+  }
+  
+  let mergeTrees = [];   
+  let baseTrees = {}; 
+  baseTree && baseTree.children.filter(child=>{
+    return child.type=='tree';
+  }).forEach(treeObj=>{
+    baseTrees[treeObj.name] = treeObj;
+  })
+  let currTrees = {};
+  currTree && currTree.children.filter(child=>{
+    return child.type=='tree';
+  }).forEach(treeObj=>{
+    currTrees[treeObj.name] = treeObj;
+  })
+  let incomingTrees = {};
+  incomingTree && incomingTree.children.filter(child=>{
+    return child.type=='tree';
+  }).forEach(treeObj=>{
+    incomingTrees[treeObj.name] = treeObj;
+  })
+  
+  
+  for(let dir in baseTrees){
+    if((dir in currTrees) && (dir in incomingTrees)){
+      // ! dir are modified
+      if(currTrees[dir].hash == incomingTrees[dir].hash){
+        mergeTrees.push(currTrees[dir]);
+      }
+      else if((currTrees[dir].hash != baseTrees[dir].hash) && (incomingTrees[dir].hash == baseTrees[dir].hash)){
+        mergeTrees.push(currTrees[dir]);
+      }
+      else if((currTrees[dir].hash == baseTrees[dir].hash) && (incomingTrees[dir].hash != baseTrees[dir].hash)){
+        mergeTrees.push(incomingTrees[dir]);
+      }
+      else{
+        mergeTrees.push(getMergedTree(baseTrees[dir], currTrees[dir], incomingTrees[dir]));
+      }
+    }
+    // ! when dirs are deleted
+    else if(!(dir in currTrees) && (dir in incomingTrees)){
+      if(incomingTrees[dir].hash == baseTrees[dir].hash){
+        continue;
+      }
+      else{
+        mergeTrees.push(getMergedTree(baseTrees[dir],null,incomingTrees[dir]));
+      }
+    }
+    else if((dir in currTrees) && !(dir in incomingTrees)){
+      if(currTrees[dir].hash == baseTrees[dir].hash){
+        continue;
+      }
+      else{
+        mergeTrees.push(getMergedTree(baseTrees[dir],currTrees[dir],null));
+      }
+    }
+    else {
+      continue;
+    }
+  }
+
+  // ! when dirs are created
+  for(let dir in currTrees){
+    if(!(dir in baseTrees) && !(dir in incomingTrees)){
+      mergeTrees.push(currTrees[dir]);
+    }
+    else if(!(dir in baseTrees) && (dir in incomingTrees)){
+      if(incomingTrees[dir] != currTrees[dir]) {
+        mergeTrees.push(getMergedTree(null,currTrees[dir],incomingTrees[dir]));
+      }
+      else {
+        mergeTrees.push(currTrees[dir]);
+      }
+    }
+  }
+
+  for(let dir in incomingTrees){
+    if(!(dir in baseTrees) && !(dir in currTrees)){
+      mergeTrees.push(incomingTrees[dir]);
+    }
+    // other conditions taken care in previous loop
+  }
+  
+  // if tree
+    // * existing trees
+      // different hashes in base, incoming and curr for same tree - (both curr/incoming modified same file) -  
+        // call recursively with  node of same file name
+      // existing tree has same hash in one of incoming/curr, and a new hash in the other - (one of curr/incoming modified) - 
+        // call recursively with node of same file name
+      // existing file has same hash in all three, 
+        // take existing hash
+    // * creation
+      // different hashes in incoming and curr for same tree - (both curr/incoming created same file with diff content -  
+        // call recursively
+      // same hash for tree in incoming and curr - (both curr/incoming, created same exact file)
+        // take the hash
+      // if a filename only is in curr xor incoming - 
+        // take the hash
+    // * deletion
+      // if file name is present in base and one of curr or incoming with a different hash - (deleted by one and modified but other)
+        // conflict
+      // if a filename from base is present in curr or incoming with same hash - (has been deleted by one or both of incoming or curr)
+        // dont take hash
+  mergeTree.children = [...mergeBlobs,...mergeTrees];
+  let treeStr = [];
+  for(let child of mergeTree.children){
+    treeStr.push(`${child.type} ${child.hash} ${child.name}`);
+  }
+  treeStr = treeStr.join("\n");
+  createObjectFromFileContent(treeStr);
+  mergeTree.hash = hash(treeStr);
+  return mergeTree;
+}
+
+function getTreeFromHash(treeHash, nodeName){
+  // make empty object to return, with name as nodeName and type: tree, hash: treehash
+  // read the contents of hash,
+  // make a temp list to accumulate children
+  // for each child
+    // if its a blob, add to list
+      // {name:childname, hash:childhash, type:blob}
+    // if its a tree add to list 
+      // getTreeFromHash(childHash,childname)
+  // add list to empty object in children property
+  // return obj
+
+  let treeObject = {name: nodeName, hash: treeHash, type:"tree"};
+  let objs = getObjectFromHash(treeHash).split("\n").filter(e=>e).map((line) => {
+    let [type, hash, name] = line.split(" ");
+    return {
+      type, hash, name
+    }
+  });
+  let children = [];
+  for(let obj of objs){
+    if(obj.type == 'blob'){
+      children.push(obj);
+    }
+    else{
+      children.push(getTreeFromHash(obj.hash, obj.name))
+    }
+  }
+  treeObject.children = children;
+  return treeObject;
 }
 
 function parseCommit(commitHash) {
@@ -698,16 +1061,31 @@ function parseCommitCaller(){
 }
 
 function getCommonAncestor(commitA, commitB) {
-  // TODO incomplete function
   if(commitA==commitB) return commitA;
   let commits = new Set();
   commits.add(commitA);
   commits.add(commitB);
-  while ("parent" in parseCommit(commitA) && "parent" in parseCommit(commitB)) {
-    commits.add(parseCommit(commitA).parent);
-    commitA = parseCommit(commitA).parent;
-    commits.add(parseCommit(commitB).parent);
-    commitB = parseCommit(commitB).parent;
+  while ("parent" in parseCommit(commitA) || "parent" in parseCommit(commitB)) {
+    let parsedA = parseCommit(commitA);
+    let parsedB = parseCommit(commitB);
+    if("parent" in parsedA){
+      if(commits.has(parsedA.parent)){
+        return parsedA.parent;
+      }
+      else{
+        commits.add(parsedA.parent);
+        commitA = parsedA.parent;
+      }
+    }
+    if("parent" in parsedB){
+      if(commits.has(parsedB.parent)){
+        return parsedB.parent;
+      }
+      else{
+        commits.add(parsedB.parent);
+        commitA = parsedB.parent;
+      }
+    }
   }
   return "";
 }
@@ -718,13 +1096,15 @@ function setUpGlobals() {
   let rootDir = "./";
   let fromLast = 0;
   while (
-    parentsDepth-- &&
+    parentsDepth!=0 &&
     !(pathExists(rootDir + ".legit") && isDir(rootDir + ".legit"))
   ) {
+    parentsDepth--;
     rootDir += "../";
     fromLast++;
   }
   if (parentsDepth <= 0) {
+    console.log(parentsDepth);
     console.log("git repository not initialised");
     process.exit();
   }
@@ -796,11 +1176,11 @@ function lsCaller(...args) {
 function commitCaller(...args) {
   if (args.length == 0) {
     execSync(`code -w ${globals.rootDir + ".legit/COMMIT_EDITMSG"}`);
-    globals.commitMessage = readFile(globals.rootDir + ".legit/COMMIT_EDITMSG")
+    globals.commitMessage = readFile( ".legit/COMMIT_EDITMSG")
       .split("\n")
       .filter((line) => {
         return line.trim()[0] != "#";
-      });
+      }).join("");
   } else if (args.length != 0 && args[0] != "-m") {
     console.log("invalid args");
     return;
@@ -903,6 +1283,9 @@ module.exports = {
   getCurrentBranch,
   checkoutBranch,
   getCommitFromBranch,
+  getCommonAncestor,
+  parseCommit,
+  merge,
   //globals
   globals,
 };

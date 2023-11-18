@@ -1,4 +1,4 @@
-let rootDir = "./../playground/"; // tells you 
+let rootDir = ""; // tells you 
 const baseDirs = [".legit/refs/heads", ".legit/objects"];
 const baseFiles = [".legit/HEAD", ".legit/index",".legit/config",".legit/COMMIT_EDITMSG"];
 const baseRef = "ref: refs/heads/main";
