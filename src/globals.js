@@ -5,6 +5,7 @@ const baseRef = "ref: refs/heads/main";
 const indexDir = ".legit/index";
 const objectDir = ".legit/objects/";
 const headsDir = ".legit/refs/heads/"
+const commitFileCommand = '';
 let username = "";
 let email = "";
 let commitMessage = "";
@@ -27,7 +28,8 @@ const global = {
   resetColor,
   headsDir,
   greenColor,
-  rootToWorkingPath
+  rootToWorkingPath,
+  commitFileCommand
 };
 
 module.exports = global;
