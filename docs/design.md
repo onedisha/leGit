@@ -33,15 +33,17 @@ basic .git structure
 ## git init (filename option)
 
 this command should create the bare basic files required for git to work,
-dirs
 
+dirs
 - .git
 - .git/refs
 - .git/refs/heads
 - .git/objects
-  files
+files
 - .git/HEAD
 - .git/index
+- .git/config
+- .git/COMMIT_EDITMSG
 
 and insert ref: refs/heads/main inside .git/HEAD
 

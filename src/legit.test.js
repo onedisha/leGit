@@ -1,52 +1,97 @@
-let {
-  // utils
-  debug,
-  logMessage,
-  setRootDir,
+const globals = require("./globals");
+
+const {
   createEmptyFile,
   deleteFile,
   deleteDir,
   createDir,
-  writeToFile,
   listPathsInDir,
+  writeToFile,
   readFile,
   pathExists,
   isFile,
   isDir,
+  lsCaller
+} = require('./util/fs_util');
+
+const {
+  isInit,
+  createObjectFromFileContent,
+  debug,
+  logMessage,
+  setRootDir,
   hash,
   compress,
   decompress,
-  // core exports
+  getObjectFromHash,
+  getLastCommit,
+  createCommitStr,
+  updateRefsWithCommit,
+  formatTimestamp,
+  getBranches,
+  fullCommitHash,
+  getCurrentBranch,
+  parseCommit,
+  setUpGlobals,
+  isDetached
+} = require('./util/util.js');
+
+const {
+  init,
+  initCaller
+} = require('./commands/init');
+
+const {
+  addCaller,
+  add,
+  addAll
+} = require('./commands/add');
+
+const {
+  commitCaller,
+  commit,
   indexToTree,
   addTreeToObjects,
-  getLastCommit,
-  formatTimestamp,
-  logCommit,
-  getObjectFromHash,
-  createObjectFromFileContent,
-  updateFilesFromTrees,
-  // core
-  init,
-  isInit,
-  add,
-  addAll,
-  commit,
+  createTree,
+  noChangesToCommit
+} = require('./commands/commit');
+
+const {
+  logCaller,
   log,
+  logCommit
+} = require('./commands/log');
+
+const {
+  checkoutCaller,
   checkoutCommit,
-  createBranch,
-  listBranches,
-  getCurrentBranch,
   checkoutBranch,
   getCommitFromBranch,
-  getCommonAncestor,
-  parseCommit,
+  updateFilesFromTrees
+} = require('./commands/checkout');
+
+const {
+  branchCaller,
+  createBranch,
+  listBranches
+} = require('./commands/branch');
+
+const {
   merge,
-  // globals
-  globals,
-} = require("./legit.js");
+  mergeCaller,
+  getMergedTree,
+  getTreeFromHash,
+  getCommonAncestor
+}= require('./commands/merge');
+
+const {
+  resetCaller,
+  reset
+} = require('./commands/reset');
 
 // setup
 setRootDir(process.cwd() + "/tests/playground/");
+globals.commitFileCommand = 'echo "this is triggered during tests"';
 deleteDir("");
 let logs = [];
 let clearLogs = () => (logs = []);
@@ -339,25 +384,27 @@ describe("core functions", () => {
     // commit
     addAll();
     commit();
-    // 4c17dd624ee9e753680572553f9ab006998d73c0
+    expect(getLastCommit()).toBe('249c1fdda48b84662820d255fcca432f1963966c');
     createBranch('feat');
     createBranch('merge');
     writeToFile("a/b.js", 'console.log("second commit");');
     writeToFile("a/c.txt", "this is a text file of second commit");
     addAll();
     commit();
+    expect(getLastCommit()).toBe('c2e1fbf165ccb816961a23ae51ba008be2e110e8');
     // 7b4b2407cdf826a32c5b52cb14bae13bfde37842
-    expect(parseCommit('7b4b2407cdf826a32c5b52cb14bae13bfde37842').parent).toBe('4c17dd624ee9e753680572553f9ab006998d73c0');
-    expect(getCommonAncestor('7b4b2407cdf826a32c5b52cb14bae13bfde37842','4c17dd624ee9e753680572553f9ab006998d73c0')).toBe('4c17dd624ee9e753680572553f9ab006998d73c0');
+    expect(parseCommit('c2e1fbf165ccb816961a23ae51ba008be2e110e8').parent).toBe('249c1fdda48b84662820d255fcca432f1963966c');
+    expect(getCommonAncestor('c2e1fbf165ccb816961a23ae51ba008be2e110e8','249c1fdda48b84662820d255fcca432f1963966c')).toBe('249c1fdda48b84662820d255fcca432f1963966c');
     // create two branches
     checkoutBranch('feat');
     writeToFile("a/b.js", 'console.log("third feat commit");');
     writeToFile("a/c.txt", "this is a text file of third feat commit");
     addAll();
     commit();
+    expect(getLastCommit()).toBe('caf84658308c3b299a0a21dd55355f9d0659057e');
     // a3de53759cfee2505b35d691d301aa79dcc0ae42
-    expect(parseCommit('a3de53759cfee2505b35d691d301aa79dcc0ae42').parent).toBe('4c17dd624ee9e753680572553f9ab006998d73c0');
-    expect(getCommonAncestor('a3de53759cfee2505b35d691d301aa79dcc0ae42','7b4b2407cdf826a32c5b52cb14bae13bfde37842')).toBe('4c17dd624ee9e753680572553f9ab006998d73c0');
+    expect(parseCommit('caf84658308c3b299a0a21dd55355f9d0659057e').parent).toBe('249c1fdda48b84662820d255fcca432f1963966c');
+    expect(getCommonAncestor('caf84658308c3b299a0a21dd55355f9d0659057e','c2e1fbf165ccb816961a23ae51ba008be2e110e8')).toBe('249c1fdda48b84662820d255fcca432f1963966c');
     
     // fast forward merge of feat into merge
     // ! before merge
@@ -366,9 +413,9 @@ describe("core functions", () => {
     //  |  a3de -- (feat)
     //  (merge)
     checkoutBranch('merge');
-    expect(getLastCommit()).toBe('4c17dd624ee9e753680572553f9ab006998d73c0');
+    expect(getLastCommit()).toBe('249c1fdda48b84662820d255fcca432f1963966c');
     merge('feat');
-    expect(getLastCommit()).toBe('a3de53759cfee2505b35d691d301aa79dcc0ae42');
+    expect(getLastCommit()).toBe('caf84658308c3b299a0a21dd55355f9d0659057e');
     // ! after merge
     // 4c17 -- 7b4b --(main)
     //    \
@@ -495,7 +542,8 @@ describe("core functions", () => {
     checkoutBranch('main');
     merge('feat');
     // log();
-    savedLog(logs.flat().join('\n'));
+    expect(getLastCommit()).toBe("9feec136b98f7d4f3c5096d1367d726a92848b71");
+    // savedLog(logs.flat().join('\n'));
     // first/fifth
     //  /a.md -> this is a in main // modified in main
     //  /b.md -> this is b // deleted in both
