@@ -204,7 +204,6 @@ function setUpGlobals() {
     fromLast++;
   }
   if (parentsDepth <= 0) {
-    console.log(parentsDepth);
     console.log("git repository not initialised");
     process.exit();
   }

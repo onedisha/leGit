@@ -17,5 +17,5 @@ let outfilepath = "out.txt";
 let patchConfig = {
   context: 3,
 };
-let patch = diff.createPatch("old", "new", oldfilestrs, newfilestrs, patchConfig);
+let patch = diff.structuredPatch("old", "new", oldfilestrs, newfilestrs, patchConfig);
 console.log(patch);

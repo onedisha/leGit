@@ -557,6 +557,10 @@ describe("core functions", () => {
     //  /ff.md -> this is ff
     deleteDir("");
   })
+
+  test("status",()=>{
+    // status tests
+  })
   // test('edge cases for the above when empty strings are added in the end of a file')
   // test('when the order of files change in commit messages)
 

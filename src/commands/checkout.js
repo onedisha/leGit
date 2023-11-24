@@ -25,6 +25,7 @@ const {
   createCommitStr,
   updateRefsWithCommit,
   fullCommitHash,
+  getBranches
 } = require('../util/util.js');
 
 const {

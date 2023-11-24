@@ -24,7 +24,8 @@ const {
   getObjectFromHash,
   getLastCommit,
   createCommitStr,
-  updateRefsWithCommit
+  updateRefsWithCommit,
+  isDetached
 } = require('../util/util.js');
 
 function commitCaller(...args) {
@@ -139,6 +140,10 @@ function noChangesToCommit(treeHash) {
 }
 
 function commit() {
+  if(isDetached()) {
+    console.log("currently in detached state, not allowed to commit");
+    return;
+  }
   let root = createTree();
   let commitStr = createCommitStr(root.hash);
   if (noChangesToCommit(root.hash)) return;

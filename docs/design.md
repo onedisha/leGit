@@ -26,8 +26,8 @@ basic .git structure
  - [x] git checkout
  - [x] git branch
  - [x] git reset
+ - [x] git status
  - [ ] git merge
- - [ ] git status
 ```
 
 ## git init (filename option)

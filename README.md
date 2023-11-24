@@ -15,7 +15,7 @@ The followings are implemented in leGit and work similarly as in git, with the o
 - [x] legit branch [branch name to create, no arguments to list branchces]
 - [x] legit checkout [-b, commit hash, branch name]
 - [x] legit reset [commit hash]
-- [ ] legit status
+- [x] legit status
 - [ ] legit merge
 - [ ] legit rebase
 - [ ] legit stash
