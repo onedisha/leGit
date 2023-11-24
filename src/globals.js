@@ -11,6 +11,7 @@ let email = "";
 let commitMessage = "";
 const yellowColor = "\x1b[33m";
 const greenColor = "\x1b[32m";
+const redColor = '\x1b[31m';
 const resetColor = "\x1b[0m";
 const rootToWorkingPath = "";
 
@@ -28,6 +29,7 @@ const global = {
   resetColor,
   headsDir,
   greenColor,
+  redColor,
   rootToWorkingPath,
   commitFileCommand
 };

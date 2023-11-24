@@ -45,38 +45,47 @@ function addCaller(...args) {
 }
 
 function add(files) {
-  if (!isInit()) {
-    console.log(".legit files missing");
-    return;
-  }
-
-  let indexContent = "";
-
+  let fileToHash = {};
+  readFile(globals.indexDir)
+  .split("\n")
+  .filter(e=>e)
+  .forEach(line=>{
+    let [fileHash,name] = line.split(' ');
+    fileToHash[name] = fileHash;
+  })
+  
   for (let file of files) {
     let fileContent = readFile(file);
     let fileHash = hash(fileContent);
-
-    indexContent += `${fileHash} ${file}\n`;
-
+    
+    fileToHash[file] = fileHash;
+    
     createObjectFromFileContent(fileContent);
   }
-
+  let indexContent = "";
+  for(let file in fileToHash){
+    indexContent += `${fileToHash[file]} ${file}\n`;
+  }
   writeToFile(globals.indexDir, indexContent);
 }
 
 function addAll() {
-  if (!isInit()) {
-    console.log(".legit files missing");
-    return;
-  }
   let files = listPathsInDir("").filter((file) => {
       return isFile(file) && !isIgnoredFromAdd(file);
   });
+  writeToFile(globals.indexDir,"");
   add(files);
 }
 
 function isIgnoredFromAdd(file) {
-  return file.slice(0, 7) == ".legit/";
+  let ignored = [".legit/"];
+  if(pathExists('.legitignore') && isFile('.legitignore'))
+    ignored = [...ignored,...readFile('.legitignore').split("\n").filter(e=>e)];
+  for(let path of ignored){
+    if(file.slice(path.length)==path || file.slice(path.length+1)==`${path}/`)
+      return true;
+  }
+  return false;
 }
 
 module.exports = {
