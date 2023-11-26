@@ -34,6 +34,7 @@ const {
 
 function checkoutCaller(...args) {
   let branches = getBranches();
+  if(!pathExists('.legit/refs')) throw "breaks byond this point";
   if (args[0] == "-b") {
     if (branches.includes(args[1])) {
       console.log("error: branch already exists");
@@ -43,8 +44,10 @@ function checkoutCaller(...args) {
       writeToFile(".legit/HEAD", `ref: refs/heads/${args[1]}`);
     }
   } else if (branches.includes(args[0])) {
+    console.log("branch only")
     checkoutBranch(args[0]);
   } else if (fullCommitHash(args[0])) {
+    console.log("it wne tot commuit");
     checkoutCommit(fullCommitHash(args[0]));
   } else {
     console.log("error: invalid arguments");
@@ -75,6 +78,7 @@ function checkoutCommit(nextCommit) {
 }
 
 function checkoutBranch(branchName) {
+  if(!pathExists('.legit/refs')) throw "breaks byond this point";
   let currCommit = getLastCommit();
 
   if (!isValidBranch(branchName)) {
@@ -84,10 +88,12 @@ function checkoutBranch(branchName) {
   let nextCommit = getCommitFromBranch(branchName);
 
   writeToFile(".legit/HEAD", `ref: refs/heads/${branchName}`);
+  if(!pathExists('.legit/refs')) throw "breaks byond this point";
 
   let currTreeHash = getObjectFromHash(currCommit).split("\n")[0].split(" ")[1];
   let nextTreeHash = getObjectFromHash(nextCommit).split("\n")[0].split(" ")[1];
   updateFilesFromTrees(currTreeHash, nextTreeHash);
+  if(!pathExists('.legit/refs')) throw "breaks byond this point";
 }
 
 function getCommitFromBranch(branchName) {
