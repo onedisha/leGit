@@ -42,15 +42,6 @@ function commitCaller(...args) {
   } else {
     globals.commitMessage = args.slice(1).join(" ");
   }
-  let configLines = readFile(".legit/config").split("\n");
-  configLines.forEach((line) => {
-    if (line.split(" ")[0] == "name") {
-      globals.username = line.split(" ")[1];
-    }
-    if (line.split(" ")[0] == "email") {
-      globals.email = line.split(" ")[1];
-    }
-  });
   // console.log(globals.commitMessage,globals.username, globals.email)
   if (globals.commitMessage && globals.username && globals.email) commit();
   else console.log("invalid message or config info");

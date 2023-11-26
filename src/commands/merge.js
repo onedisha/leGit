@@ -1,6 +1,9 @@
 const { execSync } = require("child_process");
 const globals = require("./../globals");
 const {
+  mergedFile
+} = require('./conflict')
+const {
   createEmptyFile,
   deleteFile,
   deleteDir,
@@ -30,12 +33,56 @@ const {
   parseCommit
 } = require('../util/util.js');
 const {
-  updateFilesFromTrees
+  updateFilesFromTrees, checkoutCommit
 } = require('./checkout.js');
+const {
+  addAll
+} = require('./add');
+
+const {
+  createTree
+} = require('./commit')
 
 function mergeCaller(...args) {
   // branch name is args[0]
-  merge(args[0]);
+  if(args[0]=="--continue"){
+    if(!(pathExists(".legit/MERGE_HEAD") && isFile(".legit/MERGE_HEAD"))){
+      console.log("merge not in progress, nothing to merge");
+      return;
+    }
+    addAll();
+    let root = createTree();
+    let currCommit = getLastCommit();
+    let incomingCommit = readFile(".legit/MERGE_HEAD");
+    writeToFile(".legit/COMMIT_EDITMSG", "merge commit");
+    execSync(globals.commitFileCommand);
+    globals.commitMessage = readFile(".legit/COMMIT_EDITMSG")
+      .split("\n")
+      .filter((line) => {
+        return line.trim()[0] != "#";
+      }).join("");
+    
+    // new commit
+    let commitStr = createCommitStr(root.hash,{currCommit,incomingCommit});
+    console.log(commitStr);
+    let commitHash = hash(commitStr);
+    createObjectFromFileContent(commitStr);
+
+    // update refs
+    let currBranch = getCurrentBranch();
+    writeToFile(globals.headsDir + currBranch, commitHash);
+
+    // update working dir
+    let currTreeHash = parseCommit(currCommit).tree;
+    let nextTreeHash = root.hash;
+    updateFilesFromTrees(currTreeHash, nextTreeHash);
+  }
+  else if(args[0]=="--abort"){
+    checkoutCommit(getLastCommit());
+    deleteFile('.legit/MERGE_HEAD');
+  }
+  else 
+    merge(args[0]);
 }
 
 function merge(branchName) {
@@ -64,43 +111,57 @@ function merge(branchName) {
     // ! steps for when no merge conflict 
     // ! conflict only occurs when the same file is modified
     // find merge base 
-    // get trees from merge base, current commit, and incoming commit
+    // get trees from merge base, current commit, and incoming commit 
     let baseTree = getTreeFromHash(parseCommit(mergeBase).tree, "root");
     let currTree = getTreeFromHash(parseCommit(currCommit).tree, "root");
     let incomingTree = getTreeFromHash(parseCommit(incomingCommit).tree, "root");
 
     // calculate hashes for new tree
-    let mergedTree = getMergedTree(baseTree,currTree,incomingTree);
-    
-    // create a new commit while asking for commit message,
-    writeToFile(".legit/COMMIT_EDITMSG", "merge commit");
-    execSync(globals.commitFileCommand);
-    globals.commitMessage = readFile(".legit/COMMIT_EDITMSG")
-      .split("\n")
-      .filter((line) => {
-        return line.trim()[0] != "#";
-      }).join("");
-    
-    // new commit
-    let commitStr = createCommitStr(mergedTree.hash,{currCommit,incomingCommit});
-    console.log(commitStr);
-    let commitHash = hash(commitStr);
-    createObjectFromFileContent(commitStr);
+    let conflictObj = { conflict:false };
+    let mergedTree = getMergedTree(baseTree,currTree,incomingTree,conflictObj);
 
-    // update refs
-    let currBranch = getCurrentBranch();
-    writeToFile(globals.headsDir + currBranch, commitHash);
+    if(conflictObj.conflict != true){
+      // create a new commit while asking for commit message,
+      writeToFile(".legit/COMMIT_EDITMSG", "merge commit");
+      execSync(globals.commitFileCommand);
+      globals.commitMessage = readFile(".legit/COMMIT_EDITMSG")
+        .split("\n")
+        .filter((line) => {
+          return line.trim()[0] != "#";
+        }).join("");
+      
+      // new commit
+      let commitStr = createCommitStr(mergedTree.hash,{currCommit,incomingCommit});
+      console.log(commitStr);
+      let commitHash = hash(commitStr);
+      createObjectFromFileContent(commitStr);
 
-    // update working dir
-    let currTreeHash = parseCommit(currCommit).tree;
-    let nextTreeHash = mergedTree.hash;
-    updateFilesFromTrees(currTreeHash, nextTreeHash);
+      // update refs
+      let currBranch = getCurrentBranch();
+      writeToFile(globals.headsDir + currBranch, commitHash);
+
+      // update working dir
+      let currTreeHash = parseCommit(currCommit).tree;
+      let nextTreeHash = mergedTree.hash;
+      updateFilesFromTrees(currTreeHash, nextTreeHash);
+    }
+    else{
+      // ! here there is true conflict
+      createEmptyFile('.legit/MERGE_HEAD');
+      writeToFile(".legit/MERGE_HEAD",incomingCommit);
+
+      // update working dir
+      let currTreeHash = parseCommit(currCommit).tree;
+      let nextTreeHash = mergedTree.hash;
+      updateFilesFromTrees(currTreeHash, nextTreeHash);
+
+      console.log("conflict present, please resolve conflicts and then do git merge --continue");
+    }
   }
 }
 
-function getMergedTree(baseTree,currTree,incomingTree){
+function getMergedTree(baseTree,currTree,incomingTree,conflict){
   //  ! !!!!!!! need to deal with case where there is an empty line in treeNode
-  
   // with the copy of merge base tree, recursively,
   let mergeTree = {name: baseTree.name, type:'tree'};
 
@@ -158,7 +219,13 @@ function getMergedTree(baseTree,currTree,incomingTree){
         mergeBlobs.push({'type': 'blob', 'hash': incomingBlobs[file], 'name': file});
       }
       else{
-        console.log(`Conflict in file ${file}`);
+        let newFile = mergedFile(getObjectFromHash(baseBlobs[file]), getObjectFromHash(currBlobs[file]), getObjectFromHash(incomingBlobs[file]));
+        if(newFile.conflict) {
+          console.log(`Conflict in file ${file}`);
+          conflict.conflict = true;
+        }
+        createObjectFromFileContent(newFile.newContent);
+        mergeBlobs.push({'type': 'blob', 'hash': hash(newFile.newContent), 'name': file});
       }
     }
     // ! when files are deleted
@@ -167,7 +234,13 @@ function getMergedTree(baseTree,currTree,incomingTree){
         continue;
       }
       else{
-        console.log(`Conflict in file ${file}`);
+        let newFile = mergedFile('', getObjectFromHash(currBlobs[file]), getObjectFromHash(incomingBlobs[file]));
+        if(newFile.conflict) {
+          console.log(`Conflict in file ${file}`);
+          conflict.conflict = true;
+        }
+        createObjectFromFileContent(newFile.newContent);
+        mergeBlobs.push({'type': 'blob', 'hash': hash(newFile.newContent), 'name': file});
       }
     }
     else if((file in currBlobs) && !(file in incomingBlobs)){
@@ -175,7 +248,13 @@ function getMergedTree(baseTree,currTree,incomingTree){
         continue;
       }
       else{
-        console.log(`Conflict in file ${file}`);
+        let newFile = mergedFile('', getObjectFromHash(currBlobs[file]), getObjectFromHash(incomingBlobs[file]));
+        if(newFile.conflict) {
+          console.log(`Conflict in file ${file}`);
+          conflict.conflict = true;
+        }
+        createObjectFromFileContent(newFile.newContent);
+        mergeBlobs.push({'type': 'blob', 'hash': hash(newFile.newContent), 'name': file});
       }
     }
     else {
@@ -190,7 +269,13 @@ function getMergedTree(baseTree,currTree,incomingTree){
     }
     else if(!(file in baseBlobs) && (file in incomingBlobs)){
       if(incomingBlobs[file] != currBlobs[file]) {
-        console.log(`Conflict in file ${file}`);
+        let newFile = mergedFile(getObjectFromHash(baseBlobs[file]), getObjectFromHash(currBlobs[file]), getObjectFromHash(incomingBlobs[file]));
+        if(newFile.conflict) {
+          console.log(`Conflict in file ${file}`);
+          conflict.conflict = true;
+        }
+        createObjectFromFileContent(newFile.newContent);
+        mergeBlobs.push({'type': 'blob', 'hash': hash(newFile.newContent), 'name': file});
       }
       else {
         mergeBlobs.push({'type': 'blob', 'hash': currBlobs[file], 'name': file});
@@ -238,7 +323,7 @@ function getMergedTree(baseTree,currTree,incomingTree){
         mergeTrees.push(incomingTrees[dir]);
       }
       else{
-        mergeTrees.push(getMergedTree(baseTrees[dir], currTrees[dir], incomingTrees[dir]));
+        mergeTrees.push(getMergedTree(baseTrees[dir], currTrees[dir], incomingTrees[dir],conflict));
       }
     }
     // ! when dirs are deleted
@@ -247,7 +332,7 @@ function getMergedTree(baseTree,currTree,incomingTree){
         continue;
       }
       else{
-        mergeTrees.push(getMergedTree(baseTrees[dir],null,incomingTrees[dir]));
+        mergeTrees.push(getMergedTree(baseTrees[dir],null,incomingTrees[dir],conflict));
       }
     }
     else if((dir in currTrees) && !(dir in incomingTrees)){
@@ -255,7 +340,7 @@ function getMergedTree(baseTree,currTree,incomingTree){
         continue;
       }
       else{
-        mergeTrees.push(getMergedTree(baseTrees[dir],currTrees[dir],null));
+        mergeTrees.push(getMergedTree(baseTrees[dir],currTrees[dir],null,conflict));
       }
     }
     else {
@@ -270,7 +355,7 @@ function getMergedTree(baseTree,currTree,incomingTree){
     }
     else if(!(dir in baseTrees) && (dir in incomingTrees)){
       if(incomingTrees[dir] != currTrees[dir]) {
-        mergeTrees.push(getMergedTree(null,currTrees[dir],incomingTrees[dir]));
+        mergeTrees.push(getMergedTree(null,currTrees[dir],incomingTrees[dir],conflict));
       }
       else {
         mergeTrees.push(currTrees[dir]);

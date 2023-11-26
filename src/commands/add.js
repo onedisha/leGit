@@ -82,10 +82,11 @@ function isIgnoredFromAdd(file) {
   if(pathExists('.legitignore') && isFile('.legitignore'))
     ignored = [...ignored,...readFile('.legitignore').split("\n").filter(e=>e)];
   for(let path of ignored){
-    if(file.slice(path.length)==path || file.slice(path.length+1)==`${path}/`)
+    if(file.slice(0,path.length)==path || file.slice(0,path.length+1)==`${path}/`)
       return true;
   }
   return false;
+  // return file.slice(0,7) == ".legit/";
 }
 
 module.exports = {

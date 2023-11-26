@@ -191,6 +191,7 @@ function parseCommit(commitHash) {
 }
 
 function setUpGlobals() {
+  // set up root Dir
   let currDir = process.cwd().replace(/\\/g, "/").split("/");
   let parentsDepth = currDir.length - 1;
   let rootDir = "./";
@@ -210,7 +211,18 @@ function setUpGlobals() {
   globals.rootDir = rootDir;
   if (fromLast != 0)
     globals.rootToWorkingPath = currDir.slice(-fromLast).join("/") + "/";
+  // setup file command
   globals.commitFileCommand = `code -w ${globals.rootDir + ".legit/COMMIT_EDITMSG"}`;
+  // set up config
+  let configLines = readFile(".legit/config").split("\n");
+  configLines.forEach((line) => {
+    if (line.split(" ")[0] == "name") {
+      globals.username = line.split(" ")[1];
+    }
+    if (line.split(" ")[0] == "email") {
+      globals.email = line.split(" ")[1];
+    }
+  });
 }
 
 function isDetached() {
