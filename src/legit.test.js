@@ -81,7 +81,8 @@ const {
   mergeCaller,
   getMergedTree,
   getTreeFromHash,
-  getCommonAncestor
+  getCommonAncestor,
+  conflict
 }= require('./commands/merge');
 
 const {
@@ -90,12 +91,13 @@ const {
 } = require('./commands/reset');
 
 // setup
-setRootDir(process.cwd() + "/tests/playground/");
+setRootDir(process.cwd() + "/tests/");
 globals.commitFileCommand = 'echo "this is triggered during tests"';
+globals.email = "hoggy@lemon.com";
+globals.username = "hoggy";
 deleteDir("");
 let logs = [];
 let clearLogs = () => (logs = []);
-let savedLog = console.log;
 console.log = (...msg) => {
   logs.push(msg);
 };
@@ -144,7 +146,7 @@ describe("utils", () => {
 });
 
 describe("core functions", () => {
-  test("init creates all files and dirs with content", () => {
+  test("init", () => {
     deleteDir("");
     init();
     let paths = [...globals.baseDirs, ...globals.baseFiles];
@@ -153,17 +155,16 @@ describe("core functions", () => {
     }
     expect(readFile(".legit/HEAD")).toBe(globals.baseRef);
   });
-
-  // ! first commit will have
-  // ! /a
-  // !     /b.js -> console.log("first commit");
-  // !     /c.txt -> this is a text file of first commit
-  // ! /d
-  // !     /e.py -> python for ML
-  // ! /f.md / -> first commit
-
-  test("add adds all files listed to index", () => {
+  
+  test("add", () => {
     // create necessary files and directories
+    // ! first commit will have
+    // ! /a
+    // !     /b.js -> console.log("first commit");
+    // !     /c.txt -> this is a text file of first commit
+    // ! /d
+    // !     /e.py -> python for ML
+    // ! /f.md / -> first commit
     createDir("a");
     createEmptyFile("a/b.js");
     writeToFile("a/b.js", 'console.log("first commit");');
@@ -205,13 +206,13 @@ describe("core functions", () => {
     ).toMatchObject(fileContentExpected.sort());
   });
 
-  test("contents of blobs are valid", () => {
+  test("valid blob", () => {
     expect(getObjectFromHash("d1d3e1e0ac19290a75d74f10e3481938b7154fa1")).toBe(
       "first commit"
     );
   });
 
-  test("tree is valid", () => {
+  test("valid tree", () => {
     let fileToHash = {};
     let indexFiles = readFile(globals.indexDir)
       .split("\n")
@@ -233,7 +234,7 @@ describe("core functions", () => {
     expect(root.hash).toBe("4afb75897deb6fa4c116438f4807fcfe4ddf0a31");
   });
 
-  test("commit: commit obj is of correct format", () => {
+  test("commit", () => {
     // TODO write commit str parser and stringifier
     let commitLines = [
       "tree 4afb75897deb6fa4c116438f4807fcfe4ddf0a31",
@@ -256,12 +257,10 @@ describe("core functions", () => {
     clearLogs();
     log();
     let expectedLog = [
-      `${globals.yellowColor}commit b049e50aeb70329e33419c68ea3caa4d2c887701${globals.resetColor}`,
-      "Author:",
-      "lemon",
-      "Date:",
-      "Thu, Nov 09, 2023, 12:44:15 PM GMT+5:30",
-      "\ncommit 1\n",
+      `${globals.yellowColor}commit b049e50aeb70329e33419c68ea3caa4d2c887701${globals.resetColor} (HEAD->main)\n`
+      +`Author: lemon <lemon@hoggy.com>\n`
+      +`Date: Thu, Nov 09, 2023, 12:44:15 PM GMT+5:30\n`
+      +`\ncommit 1\n`
     ];
     expect(logs.flat()).toMatchObject(expectedLog);
     clearLogs();
@@ -276,7 +275,7 @@ describe("core functions", () => {
   // !     /e.py -> python for ML
   // ! /g.md / -> first commit
 
-  test("checkout works as intended and only affects files in the commit", () => {
+  test("checkout commit", () => {
     let checkoutHash = getLastCommit();
     expect(checkoutHash).toBe('b049e50aeb70329e33419c68ea3caa4d2c887701');
     // add changes and add a commit
@@ -294,26 +293,7 @@ describe("core functions", () => {
     addAll();
     commit();
     expect(getLastCommit()).toBe("20c0d16d7ce0aab898ec527afe4dde39836ddce0");
-
-    let expectedLog = [
-      `${globals.yellowColor}commit 20c0d16d7ce0aab898ec527afe4dde39836ddce0${globals.resetColor}`,
-      "Author:",
-      "hoggy",
-      "Date:",
-      "Thu, Nov 09, 2023, 12:44:15 PM GMT+5:30",
-      "\nsecond commit\n",
-      `${globals.yellowColor}commit b049e50aeb70329e33419c68ea3caa4d2c887701${globals.resetColor}`,
-      "Author:",
-      "lemon",
-      "Date:",
-      "Thu, Nov 09, 2023, 12:44:15 PM GMT+5:30",
-      "\ncommit 1\n",
-    ];
-    clearLogs();
-    log();
-    expect(logs.flat()).toMatchObject(expectedLog);
     // expected files exists coz commit hash is correct
-
     checkoutCommit(checkoutHash);
     // check if previous files exist
     expect(pathExists("a/b.js")).toBe(true);
@@ -330,7 +310,7 @@ describe("core functions", () => {
     // deleteDir("")
   });
   
-  test('branch ',()=>{
+  test('branch',()=>{
     checkoutCommit('20c0d16d7ce0aab898ec527afe4dde39836ddce0'); // commit 2
     let branchName = 'lemon/hoggy';
     createBranch(branchName);
@@ -358,7 +338,7 @@ describe("core functions", () => {
 
   })
   
-  test("checkout branch by name",()=>{
+  test("checkout branch",()=>{
     expect(getCurrentBranch()).toBe(false);
     checkoutBranch('lemon/hoggy');
     expect(readFile('.legit/HEAD')).toBe('ref: refs/heads/lemon/hoggy');
@@ -372,7 +352,10 @@ describe("core functions", () => {
     expect(pathExists("g.md")).toBe(true);
   })
 
-  test("merge-ff",()=>{
+  test("merge -fast-forward",()=>{
+    globals.email = "hoggy@lemon.com";
+    globals.username = "hoggy";
+    globals.commitMessage = "second commit";
     deleteDir("");
     init();
 
@@ -426,8 +409,139 @@ describe("core functions", () => {
     
   })
 
-  
-  test('merge-true',()=>{
+  test('merge -true',()=>{
+    globals.email = "hoggy@lemon.com";
+    globals.username = "hoggy";
+    deleteDir("");
+    clearLogs();
+    init();
+    // first/fifth
+    //  /a.md -> this is a
+    //  /b.md -> this is b
+    // second/sixth
+    //  /c.md -> this is c
+    //  /d.md -> this is d
+    // third
+    //  e.md -> this is e
+    let dirs = ['first/fifth','second/sixth','third'];
+    let files = [
+      ['first/fifth/a.md',"this is a"],
+      ['first/fifth/b.md',"this is b"],
+      ['second/sixth/c.md',"this is c"],
+      ['second/sixth/d.md',"this is d"],
+      ['third/e.md',"this is e"]
+    ]
+    for(let dir of dirs){
+      createDir(dir);
+    }
+    for(let [name,content] of files){
+      createEmptyFile(name);
+      writeToFile(name,content);
+    }
+    addAll();
+    globals.commitMessage = "merge Base";
+    commit();
+    createBranch('feat');
+    // first/fifth
+    //  /a.md -> this is a in main // modified in main
+    //  /b.md -> this is b // deleted in both
+    // second/sixth
+    //  /c.md -> this is c // no change in both
+    //  /d.md -> this is d // delete this in main
+    //  /e.md -> this is e new in main // created in main
+    // third // delete Dir in main ignore in 
+    //  e.md -> this is e
+    // fourth // created in main
+    //  /ff.md -> this is ff
+    dirs = ['fourth'];
+    files = [
+      ['first/fifth/a.md',"this is a in main"],
+      ['second/sixth/e.md',"this is d"],
+      ['fourth/ff.md',"this is ff"]
+    ]
+    let delFiles = [
+      'first/fifth/b.md',
+      'second/sixth/d.md',
+    ]
+    let delDirs = ['third'];
+    for(let dir of dirs){
+      createDir(dir);
+    }
+    for(let [name,content] of files){
+      if(!pathExists(name))
+        createEmptyFile(name);
+      writeToFile(name,content);
+    }
+    for(let files of delFiles){
+      deleteFile(files);
+    }
+    for(let dir of delDirs){
+      deleteDir(dir);
+    }
+    addAll();
+    globals.commitMessage = "main second modification commit";
+    commit();
+    checkoutBranch('feat');
+    // first/fifth
+    //  /a.md -> this is a in main // modified in main
+    //  /b.md -> this is b // deleted in both
+    // second/sixth
+    //  /c.md -> this is c // no change in both
+    //  /d.md -> this is d // delete this in main
+    //  /e.md -> this is e new in main // created in main
+    // third // delete in both
+    //  e.md -> this is e
+    // fourthe // created in feat
+    //  /ff.md -> this is ff
+    dirs = ['fourthe'];
+    files = [
+      ['fourthe/ff.md',"this is ff"]
+    ]
+    delFiles = [
+      'first/fifth/b.md'
+    ]
+    delDirs = [
+      'third'
+    ]
+    for(let dir of dirs){
+      createDir(dir);
+    }
+    for(let [name,content] of files){
+      if(!pathExists(name))
+        createEmptyFile(name);
+      writeToFile(name,content);
+    }
+    for(let files of delFiles){
+      deleteFile(files);
+    }
+    for(let dir of delDirs){
+      deleteDir(dir);
+    }
+    addAll();
+    globals.commitMessage = "this is feat commit";
+    commit();
+    checkoutBranch('main');
+    merge('feat');
+    // log();
+    expect(getLastCommit()).toBe("9feec136b98f7d4f3c5096d1367d726a92848b71");
+    // savedLog(logs.flat().join('\n'));
+    // first/fifth
+    //  /a.md -> this is a in main // modified in main
+    //  /b.md -> this is b // deleted in both
+    // second/sixth
+    //  /c.md -> this is c // no change in both
+    //  /d.md -> this is d // delete this in main
+    //  /e.md -> this is d // created in main
+    // third // delete in both
+    //  e.md -> this is e
+    // fourthe // created in feat
+    //  /ff.md -> this is ff
+    deleteDir("");
+  })
+
+  test('merge -conflict',()=>{
+    globals.email = "hoggy@lemon.com";
+    globals.username = "hoggy";
     deleteDir("");
     clearLogs();
     init();
@@ -470,6 +584,16 @@ describe("core functions", () => {
     //  e.md -> this is e
     // fourth // created in main
     //  /ff.md -> this is ff
+    files = [
+      ['first/fifth/a.md',"this is a in main"],
+      ['first/fifth/b.md',"this is b in mai also"],
+      ['second/sixth/c.md',"this is c in main"],
+      ['second/sixth/d.md',"this is d in main"],
+      ['third/e.md',"this is e"]
+    ]
+    for(let [name,content] of files){
+      writeToFile(name,content);
+    }
     dirs = ['fourth'];
     files = [
       ['first/fifth/a.md',"this is a in main"],
@@ -498,7 +622,6 @@ describe("core functions", () => {
     addAll();
     globals.commitMessage = "main second modification commit";
     commit();
-    log();
     checkoutBranch('feat');
     // first/fifth
     //  /a.md -> this is a in main // modified in main
@@ -511,6 +634,16 @@ describe("core functions", () => {
     //  e.md -> this is e
     // fourthe // created in feat
     //  /ff.md -> this is ff
+    files = [
+      ['first/fifth/a.md',"this is a in feat"],
+      ['first/fifth/b.md',"this is b in feat also"],
+      ['second/sixth/c.md',"this is c in feat"],
+      ['second/sixth/d.md',"this is d in feat"],
+      ['third/e.md',"this is e"]
+    ]
+    for(let [name,content] of files){
+      writeToFile(name,content);
+    }
     dirs = ['fourthe'];
     files = [
       ['fourthe/ff.md',"this is ff"]
@@ -538,31 +671,32 @@ describe("core functions", () => {
     addAll();
     globals.commitMessage = "this is feat commit";
     commit();
-    log();
     checkoutBranch('main');
+    clearLogs();
     merge('feat');
-    // log();
-    expect(getLastCommit()).toBe("9feec136b98f7d4f3c5096d1367d726a92848b71");
-    // savedLog(logs.flat().join('\n'));
-    // first/fifth
-    //  /a.md -> this is a in main // modified in main
-    //  /b.md -> this is b // deleted in both
-    // second/sixth
-    //  /c.md -> this is c // no change in both
-    //  /d.md -> this is d // delete this in main
-    //  /e.md -> this is d // created in main
-    // third // delete in both
-    //  e.md -> this is e
-    // fourthe // created in feat
-    //  /ff.md -> this is ff
+    let expectedLog =  [
+      "Conflict in file a.md",
+      "Conflict in file c.md",
+      "Conflict in file d.md",
+      "1b33e75280e4a8712d35bc7568e7fbb960a85177",
+      "6f6af19f3a0e93f29027695b5ff97d2579daaf92",
+      "e2b5447056f97df589a9c7dc7c1ed2103cc96719",
+      "a6cc4dba80a2e4afa0e220ea51373ba90c35eb78",
+      "conflict present, please resolve conflicts and then do git merge --continue",
+    ];
+    expect(logs.flat()).toMatchObject(expectedLog);
+    expect(readFile('first/fifth/a.md')).toBe(
+     `<<<<<<< current\n`
+    +`this is a in main\n`
+    +`=======\n`
+    +`this is a in feat\n`
+    +`>>>>>>> incoming`);
     deleteDir("");
   })
 
   test("status",()=>{
     // status tests
   })
-  // test('edge cases for the above when empty strings are added in the end of a file')
-  // test('when the order of files change in commit messages)
 
 });
 // TODO unit tests

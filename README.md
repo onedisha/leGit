@@ -16,17 +16,15 @@ The followings are implemented in leGit and work similarly as in git, with the o
 - [x] legit checkout [-b, commit hash, branch name]
 - [x] legit reset [commit hash]
 - [x] legit status
-- [ ] legit merge
-- [ ] legit rebase
-- [ ] legit stash
+- [x] legit merge
 
 ## Differences from git
 
 While these commands work similarly there are a few differences to note:
-- log does not list the names of the branches along side the commit and only lists the commits
 - reset --mixed and --hard do not restore the index file to how it was during the target commit but clear them instead so there is a need to add again as required
 - the implementation does not implement plumbing commands underneath
 - force line endings, while reading a file, leGit autoconverts lineendings to \n. so while your working dir may contain CRLF, commits only contain LF and checking out any commit **will** replace line endings.
+- in case of a merge conflict, we do not follow the same procedure as git, we use MERGE_HEAD alone to help identify incoming commit. during the commit, the index file does maintain 3 different versions of the files, the only thing that happens is conflict markers appearing in the conflicted files, need to make changes to show the conflicted files. The merge can be completed by merge --continue
 
 ## Future plans
 <p align="justify">
@@ -37,7 +35,7 @@ Currently only the local commands of git are implemented. Once merge, rebase, st
 To work with or use legit, 
 ** currently the pkg package only works with node version <=18.17.1, so for node v > 18.17.1 you need to find ways to convert the files into binary yourself. We will provide a fix for it soon.
 
-1. clone the repo and cd into it
+1. Clone the repo and cd into it
     ```
     git clone https://github.com/onedisha/leGit.git
     cd leGit
@@ -51,6 +49,10 @@ To work with or use legit,
     ```
     pwd (get path and use that)
     // add that to the syste env path
+    ```
+4. Change the path variable in src/index.js file to the path of src/legit.js
+    ```
+    npm run bin
     ```
 
 Now feel free to use this version of legit anywhere in your system, note that it takes the live version of all the contents of legit.js each time, hence your changes if any will affect the places where you use legit.

@@ -83,9 +83,7 @@ function mergedFile(base,current,incoming){
     }
     else {
       conflict = true;
-      console.log("tsartign to find max");
       let num = findmaxnum(oldLines,i);
-      console.log(`found max ${num} at ${i}`);
       newLines.push("<<<<<<< current");
       addchanges(newLines, oldLines, i, num, "curr");
       newLines.push("=======");
@@ -107,9 +105,9 @@ function findmaxnum(oldLines,i){
   let currplus = line.curr.plus != undefined;
   let currminus = line.curr.minus != undefined;
   let ret = 0;
-  console.log(( incomingminus|| incomingplus || currminus || currplus ) && ((i+1) in oldLines));
+  // console.log(( incomingminus|| incomingplus || currminus || currplus ) && ((i+1) in oldLines));
   while(( incomingminus|| incomingplus || currminus || currplus ) && ((i+1) in oldLines)){
-    console.log(i);
+    // console.log(i);
     i++;
     line = oldLines[i];
     incomingplus = line.incoming.plus != undefined;
@@ -140,5 +138,7 @@ function addchanges(newLines, oldLines, i, num, type){
 }
 
 module.exports = {
-  mergedFile
+  mergedFile,
+  findmaxnum,
+  addchanges
 }

@@ -185,6 +185,15 @@ function parseCommit(commitHash) {
     }
     let key = file[line].split(" ")[0];
     let value = file[line].split(" ")[1];
+    if(key == "author"){
+      commitDetails["time"] = file[line].split(" ")[3];
+      commitDetails['email'] = file[line].split(" ")[2].slice(1,-1);
+    }
+    if(key=="parent" && commitDetails.parent != undefined){
+      commitDetails['merge'] = true;
+      commitDetails['incoming'] = value;
+      commitDetails['current'] = commitDetails['parent'];
+    }
     commitDetails[key]=value;
   }
   return commitDetails;

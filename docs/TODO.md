@@ -1,5 +1,5 @@
  - [X] 1. split the utils to another file
- - [ ] 2. add tests for each function
+ - [X] 2. add tests for each function
  - [X] 3. Convert the code to clean code, by describing intent with code
  - [ ] 4. add checks before doing an action, like isInit() but for commit as well
  - [ ] 5. add exception handling for all the wrapper functions
