@@ -1,9 +1,6 @@
 const { execSync } = require("child_process");
 const globals = require("./../globals");
 const {
-  mergedFile
-} = require('./conflict')
-const {
   createEmptyFile,
   deleteFile,
   deleteDir,
@@ -38,6 +35,11 @@ const {
 const {
   addAll
 } = require('./add');
+const {
+  mergedFile,
+  findmaxnum,
+  addchanges
+} = require('./conflict')
 
 const {
   createTree
@@ -76,6 +78,9 @@ function mergeCaller(...args) {
     let currTreeHash = parseCommit(currCommit).tree;
     let nextTreeHash = root.hash;
     updateFilesFromTrees(currTreeHash, nextTreeHash);
+
+    // delete merge head
+    deleteFile('.legit/MERGE_HEAD');
   }
   else if(args[0]=="--abort"){
     checkoutCommit(getLastCommit());
@@ -234,7 +239,7 @@ function getMergedTree(baseTree,currTree,incomingTree,conflict){
         continue;
       }
       else{
-        let newFile = mergedFile('', getObjectFromHash(currBlobs[file]), getObjectFromHash(incomingBlobs[file]));
+        let newFile = mergedFile(getObjectFromHash(baseBlobs[file]), '', getObjectFromHash(incomingBlobs[file]));
         if(newFile.conflict) {
           console.log(`Conflict in file ${file}`);
           conflict.conflict = true;
@@ -248,7 +253,7 @@ function getMergedTree(baseTree,currTree,incomingTree,conflict){
         continue;
       }
       else{
-        let newFile = mergedFile('', getObjectFromHash(currBlobs[file]), getObjectFromHash(incomingBlobs[file]));
+        let newFile = mergedFile(getObjectFromHash(baseBlobs[file]), getObjectFromHash(currBlobs[file]), '');
         if(newFile.conflict) {
           console.log(`Conflict in file ${file}`);
           conflict.conflict = true;
@@ -269,7 +274,7 @@ function getMergedTree(baseTree,currTree,incomingTree,conflict){
     }
     else if(!(file in baseBlobs) && (file in incomingBlobs)){
       if(incomingBlobs[file] != currBlobs[file]) {
-        let newFile = mergedFile(getObjectFromHash(baseBlobs[file]), getObjectFromHash(currBlobs[file]), getObjectFromHash(incomingBlobs[file]));
+        let newFile = mergedFile('', getObjectFromHash(currBlobs[file]), getObjectFromHash(incomingBlobs[file]));
         if(newFile.conflict) {
           console.log(`Conflict in file ${file}`);
           conflict.conflict = true;
@@ -323,7 +328,7 @@ function getMergedTree(baseTree,currTree,incomingTree,conflict){
         mergeTrees.push(incomingTrees[dir]);
       }
       else{
-        mergeTrees.push(getMergedTree(baseTrees[dir], currTrees[dir], incomingTrees[dir],conflict));
+        mergeTrees.push(getMergedTree(baseTrees[dir], currTrees[dir], incomingTrees[dir], conflict));
       }
     }
     // ! when dirs are deleted

@@ -9,6 +9,7 @@ basic .git structure
             /main
     /HEAD
     /index
+    /
     /objects
         /1f
             /aedfawdff...
@@ -27,10 +28,10 @@ basic .git structure
  - [x] git branch
  - [x] git reset
  - [x] git status
- - [ ] git merge
+ - [x] git merge
 ```
 
-## git init (filename option)
+## git init
 
 this command should create the bare basic files required for git to work,
 
@@ -47,7 +48,7 @@ files
 
 and insert ref: refs/heads/main inside .git/HEAD
 
-## git add (-A, ,filenames)
+## git add (-A, filenames)
 
 this command should convert all the files listed to blobs and add them to .git/objects and store their information temporarily in
 '.git/index'
@@ -76,19 +77,24 @@ this command is three steps
 2. create a commit object with the root of tree, commiter name, email, commit message, commit description and add it to .git/objects
 3. add the commit if to the refs/heads/branch that the HEAD is currently pointing to.
 
-## git log (--oneline and normal)
+## git log
+this command logs the commits and their parents until the root commit, along with information such as 
 
 ## git checkout (commit, branch, -b option)
 
 this command needs to compare both the trees of current head and the head to which we are checking out, deleting files which dont exist and adding files which do and populating them with the contents of the hashes. Also obviously this also needs to change the reference that the HEAD is currently pointing to. Either to a new ref or to a commit
 
-## git branch (create, delete)
+## git branch (create, display)
 
 this command (referring to creation of branch) simple changes the pointer that HEAD is pointing to.
 
 - there is a slight confusion about whether to copy the contents of place from which to branch
 
-## git reset (hard)
+## git reset (--soft, --mixed, --hard)
 
 this command, only the hard version just removes the last commit from the current branch file in refs/heads/branch
 the other versions can be implemented later
+
+## git merge
+
+this command merges two branches and creates a new commit (if necessary)
