@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "bin": "pkg src/index.js -o leg"
+    "release": "pkg src/legit.js -o bin/legit -t node18-win-x64,node18-linux-x64",
+    "bin": "pkg src/index.js -o legit"
   },
   "author": "Lemon and hoggy",
   "license": "ISC",
