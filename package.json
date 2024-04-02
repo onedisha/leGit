@@ -1,22 +1,47 @@
 {
-  "name": "legit",
+  "name": "thegit",
   "version": "1.0.0",
-  "description": "Implementing Git with Node.js",
-  "main": "index.js",
+  "description": "Implementation of git in node.js.",
+  "main": "legit.js",
   "scripts": {
     "test": "jest",
     "release": "pkg src/legit.js -o bin/legit -t node18-win-x64,node18-linux-x64",
     "bin": "pkg src/index.js -o legit"
   },
-  "author": "Lemon and hoggy",
-  "license": "ISC",
+  "contributors": [
+    {
+      "name": "Udith Kumar V",
+      "email": "udithkumarvd+github@gmail.com"
+    },
+    {
+      "name": "Disha Tantia",
+      "email": "dishatantia18+github@gmail.com"
+    }
+  ],
+  "license": "MIT",
   "dependencies": {
     "child_process": "^1.0.2",
     "diff": "^5.1.0",
     "hash-files": "^1.1.1",
     "object-hash": "^3.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/onedisha/leGit.git"
+  },
   "devDependencies": {
     "jest": "^29.7.0"
-  }
+  },
+  "bin":{
+    "thegit": "./src/legit.js"
+  },
+  "keywords": [
+    "git",
+    "custom",
+    "implementation",
+    "legit",
+    "thegit",
+    "mygit",
+    "customgit"
+  ]
 }
