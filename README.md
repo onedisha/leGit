@@ -48,7 +48,7 @@ To work with or use legit,
 3. Add current working directory to Path
     ```
     pwd (get path and use that)
-    // add that to the syste env path
+    // add that to the system env path
     ```
 4. Change the path variable in src/index.js file to the path of src/legit.js
     ```
